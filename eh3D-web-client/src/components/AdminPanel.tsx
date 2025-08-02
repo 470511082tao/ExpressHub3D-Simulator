@@ -28,7 +28,7 @@ interface GridTemplate {
   disabledCells?: number[] // 禁用的格口索引数组
 }
 
-// 检查分类是否支持格口模板
+// 支持格口模板的分类
 const supportGridTemplate = (categoryName: string): boolean => {
   return categoryName === '快递柜' || categoryName === '货架'
 }
@@ -39,7 +39,7 @@ const generateCellCode = (index: number, rows: number, columns: number): string 
   const displayRow = Math.floor(index / columns)  // 显示的行号（0开始）
   const displayCol = index % columns              // 显示的列号（0开始）
   
-  // 按列编号：第1列是1-rows，第2列是(rows+1)-(2*rows)
+  // 按列编号：第1列从上到下是1,2,3...rows，第2列是(rows+1)到(2*rows)
   const cellNumber = displayCol * rows + displayRow + 1
   return cellNumber.toString()
 }
@@ -48,11 +48,11 @@ const generateCellCode = (index: number, rows: number, columns: number): string 
 const DEFAULT_CATEGORIES: Category[] = [
   { id: 'cabinets', name: '快递柜', description: '各种类型的快递柜设备' },
   { id: 'shelves', name: '货架', description: '仓储货架和展示架' },
-  { id: 'buildings', name: '建筑', description: '建筑物和构筑物模型' }
+  { id: 'equipment', name: '设备', description: '各种设备和工具模型' }
 ]
 
 // 受保护的默认分类ID（不能编辑、修改、删除）
-const PROTECTED_CATEGORY_IDS = ['cabinets', 'shelves', 'buildings']
+const PROTECTED_CATEGORY_IDS = ['cabinets', 'shelves', 'equipment']
 
 // 检查是否为受保护的分类
 const isProtectedCategory = (categoryId: string): boolean => {
@@ -60,14 +60,9 @@ const isProtectedCategory = (categoryId: string): boolean => {
 }
 
 // 分类工具函数
-const getCategoryById = (categories: Category[], id: string): Category | undefined => {
-  return categories.find(cat => cat.id === id)
-}
 
-const getCategoryName = (categories: Category[], id: string): string => {
-  const category = getCategoryById(categories, id)
-  return category ? category.name : id // 如果找不到分类，返回ID本身
-}
+
+
 
 // 静态方法访问的工具函数
 const fileToArrayBuffer = (file: File): Promise<ArrayBuffer> => {
@@ -197,33 +192,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBack }) => {
     }
   }
 
-  const handleAddCategory = (categoryNameOrObj: string | Category) => {
-    let newCategory: Category
-    
-    if (typeof categoryNameOrObj === 'string') {
-      // 旧的方式：只传入名称
-      const categoryName = categoryNameOrObj
-      if (categoryName && !categories.some(cat => cat.name === categoryName)) {
-        newCategory = { 
-          id: Date.now().toString(), 
-          name: categoryName, 
-          description: '' 
-        }
-      } else {
-        return
-      }
-    } else {
-      // 新的方式：传入完整的Category对象
-      newCategory = categoryNameOrObj
-      if (!newCategory.name || categories.some(cat => cat.name === newCategory.name)) {
-        return
-      }
-    }
 
-    const newCategories = [...categories, newCategory]
-    setCategories(newCategories)
-    saveData(models, newCategories)
-  }
 
   const handleDeleteCategory = async (categoryName: string) => {
     // 找到对应的分类对象
@@ -302,7 +271,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBack }) => {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" style={{ height: 'calc(100vh - 64px)', overflow: 'auto' }}>
         {/* 标签页导航 */}
         <div className="flex space-x-8 mb-8">
           <button
@@ -634,7 +603,8 @@ const ModelUploadModal: React.FC<ModelUploadModalProps> = ({
     description: '',
     file: null as File | null,
     previewImage: null as File | null,
-    dimensions: [1, 1, 1] as [number, number, number],
+    cost: 0, // 新增：成本金额
+    dimensions: [1, 1, 1] as [number, number, number], // 临时保留以避免错误
     gridTemplate: {
       rows: 3,
       columns: 4,
@@ -758,7 +728,7 @@ const ModelUploadModal: React.FC<ModelUploadModalProps> = ({
         fileSize: formData.file.size,
         uploadTime: new Date().toISOString(),
         description: formData.description || undefined,
-        dimensions: supportGridTemplate(formData.category) ? undefined : formData.dimensions, // 非格口模板类型使用尺寸
+        cost: formData.cost || undefined, // 添加成本金额
         fileContent: fileArrayBuffer, // 直接存储ArrayBuffer
         previewImage: previewImageBuffer || undefined, // 存储压缩后的预览图片
         previewImageType: previewImageType || undefined, // 存储图片类型
@@ -840,32 +810,53 @@ const ModelUploadModal: React.FC<ModelUploadModalProps> = ({
               />
             </div>
 
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                成本金额 (元)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={formData.cost}
+                onChange={(e) => setFormData({ 
+                  ...formData, 
+                  cost: parseFloat(e.target.value) || 0
+                })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 
+                         focus:ring-primary-500 focus:border-primary-500"
+                placeholder="请输入模型成本金额"
+              />
+              <p className="text-xs text-gray-500 mt-1">请输入模型的采购或制作成本</p>
+            </div>
+
             {/* 尺寸信息或格口模板配置 */}
-            {supportGridTemplate(formData.category) ? (
+            {supportGridTemplate(formData.category) && (
               // 格口模板配置（用于快递柜和货架）
               <div className="border-t border-gray-200 pt-4">
                 <div className="flex items-center gap-2 mb-3">
                   <label className="block text-sm font-medium text-gray-700">
                     格口模板
                   </label>
-                  <label className="flex items-center">
                     <input
                       type="checkbox"
                       checked={formData.gridTemplate.enabled}
-                      onChange={(e) => setFormData(prev => ({
-                        ...prev,
-                        gridTemplate: { ...prev.gridTemplate, enabled: e.target.checked }
-                      }))}
-                      className="mr-2"
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      gridTemplate: {
+                        ...formData.gridTemplate,
+                        enabled: e.target.checked
+                      }
+                    })}
+                    className="rounded border-gray-300 text-primary-600 
+                             focus:ring-primary-500 focus:border-primary-500"
                     />
-                    <span className="text-sm text-gray-600">启用格口布局</span>
-                  </label>
+                  <span className="text-sm text-gray-600">启用格口模板</span>
                 </div>
                 
                 {formData.gridTemplate.enabled && (
-                  <div className="space-y-4">
-                    {/* 行列配置 */}
-                    <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="grid grid-cols-2 gap-4 mb-3">
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">
                           行数
@@ -875,20 +866,16 @@ const ModelUploadModal: React.FC<ModelUploadModalProps> = ({
                           min="1"
                           max="20"
                           value={formData.gridTemplate.rows}
-                          onChange={(e) => setFormData(prev => {
-                            const newRows = parseInt(e.target.value) || 1
-                            const newTotalCells = newRows * prev.gridTemplate.columns
-                            return {
-                              ...prev,
+                          onChange={(e) => setFormData({
+                            ...formData,
                               gridTemplate: { 
-                                ...prev.gridTemplate, 
-                                rows: newRows,
-                                disabledCells: (prev.gridTemplate.disabledCells || []).filter(index => index < newTotalCells)
-                              }
+                              ...formData.gridTemplate,
+                              rows: parseInt(e.target.value) || 1,
+                              disabledCells: [] // 重置禁用格口
                             }
                           })}
-                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 
-                                   focus:ring-primary-500 focus:border-primary-500"
+                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded 
+                                   focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
                         />
                       </div>
                       <div>
@@ -900,153 +887,78 @@ const ModelUploadModal: React.FC<ModelUploadModalProps> = ({
                           min="1"
                           max="20"
                           value={formData.gridTemplate.columns}
-                          onChange={(e) => setFormData(prev => {
-                            const newColumns = parseInt(e.target.value) || 1
-                            const newTotalCells = prev.gridTemplate.rows * newColumns
-                            return {
-                              ...prev,
+                          onChange={(e) => setFormData({
+                            ...formData,
                               gridTemplate: { 
-                                ...prev.gridTemplate, 
-                                columns: newColumns,
-                                disabledCells: (prev.gridTemplate.disabledCells || []).filter(index => index < newTotalCells)
-                              }
+                              ...formData.gridTemplate,
+                              columns: parseInt(e.target.value) || 1,
+                              disabledCells: [] // 重置禁用格口
                             }
                           })}
-                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 
-                                   focus:ring-primary-500 focus:border-primary-500"
+                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded 
+                                   focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
                         />
                       </div>
                     </div>
 
-                    {/* 可视化预览 */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="block text-xs font-medium text-gray-600">
-                          格口布局 ({formData.gridTemplate.rows}×{formData.gridTemplate.columns})
+                    <div className="mb-3">
+                      <label className="block text-xs font-medium text-gray-600 mb-2">
+                        点击格口设为禁用（灰色表示禁用）
                         </label>
-                        <div className="flex gap-1">
-                          <button
-                            type="button"
-                            onClick={() => setFormData(prev => ({
-                              ...prev,
-                              gridTemplate: { ...prev.gridTemplate, disabledCells: [] }
-                            }))}
-                            className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors"
-                            title="启用所有格口"
-                          >
-                            全启用
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setFormData(prev => ({
-                              ...prev,
-                              gridTemplate: { 
-                                ...prev.gridTemplate, 
-                                disabledCells: Array.from({ length: prev.gridTemplate.rows * prev.gridTemplate.columns }, (_, i) => i)
-                              }
-                            }))}
-                            className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
-                            title="禁用所有格口"
-                          >
-                            全禁用
-                          </button>
-                        </div>
-                      </div>
-                      <div className="p-3 bg-gray-50 rounded-lg border">
-                        <div 
-                          className="grid gap-1 max-w-xs mx-auto"
+                      <div 
+                        className="grid gap-1 border border-gray-300 rounded p-2 bg-gray-50"
                           style={{
                             gridTemplateColumns: `repeat(${formData.gridTemplate.columns}, 1fr)`,
-                            gridTemplateRows: `repeat(${formData.gridTemplate.rows}, 1fr)`
+                          maxWidth: '300px'
                           }}
                         >
                           {Array.from({ length: formData.gridTemplate.rows * formData.gridTemplate.columns }, (_, index) => {
                             const isDisabled = formData.gridTemplate.disabledCells?.includes(index) || false
                             const cellCode = generateCellCode(index, formData.gridTemplate.rows, formData.gridTemplate.columns)
                             return (
-                              <div
+                            <button
                                 key={index}
-                                onClick={() => handleCellClick(index)}
-                                className={`w-7 h-7 border border-gray-300 rounded flex items-center justify-center text-xs cursor-pointer transition-colors font-mono ${
-                                  isDisabled 
-                                    ? 'bg-red-500 text-white border-red-600 hover:bg-red-600' 
-                                    : 'bg-white text-gray-500 hover:bg-gray-100'
-                                }`}
-                                title={`格口${cellCode}号 - ${isDisabled ? '点击启用此格口' : '点击禁用此格口'}`}
+                              type="button"
+                              onClick={() => {
+                                const disabledCells = formData.gridTemplate.disabledCells || []
+                                const newDisabledCells = isDisabled
+                                  ? disabledCells.filter(i => i !== index)
+                                  : [...disabledCells, index]
+                                
+                                setFormData({
+                                  ...formData,
+                                  gridTemplate: {
+                                    ...formData.gridTemplate,
+                                    disabledCells: newDisabledCells
+                                  }
+                                })
+                              }}
+                              className={`
+                                w-8 h-8 text-xs font-medium rounded border
+                                ${isDisabled 
+                                  ? 'bg-gray-400 text-gray-600 border-gray-500' 
+                                  : 'bg-green-100 text-green-800 border-green-300 hover:bg-green-200'
+                                }
+                                transition-colors duration-150
+                              `}
+                              title={`格口 ${cellCode} - ${isDisabled ? '禁用' : '可用'}`}
                               >
                                 {cellCode}
-                              </div>
+                            </button>
                             )
                           })}
                         </div>
+                    </div>
+
                         <div className="mt-2 text-xs text-center">
                           <span className="text-gray-600">
                             已禁用 {formData.gridTemplate.disabledCells?.length || 0} 个格口 / 
                             可用 {formData.gridTemplate.rows * formData.gridTemplate.columns - (formData.gridTemplate.disabledCells?.length || 0)} 个格口
                           </span>
-                        </div>
-                      </div>
                     </div>
                   </div>
                 )}
 
-              </div>
-            ) : (
-              // 传统尺寸配置（用于建筑等其他类型）
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  模型尺寸 (长×宽×高，单位：米)
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0.1"
-                      value={formData.dimensions[0]}
-                      onChange={(e) => setFormData({ 
-                        ...formData, 
-                        dimensions: [parseFloat(e.target.value) || 1, formData.dimensions[1], formData.dimensions[2]]
-                      })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 
-                               focus:ring-primary-500 focus:border-primary-500 text-center"
-                      placeholder="长"
-                    />
-                    <p className="text-xs text-gray-500 text-center mt-1">长</p>
-                  </div>
-                  <div>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0.1"
-                      value={formData.dimensions[1]}
-                      onChange={(e) => setFormData({ 
-                        ...formData, 
-                        dimensions: [formData.dimensions[0], parseFloat(e.target.value) || 1, formData.dimensions[2]]
-                      })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 
-                               focus:ring-primary-500 focus:border-primary-500 text-center"
-                      placeholder="宽"
-                    />
-                    <p className="text-xs text-gray-500 text-center mt-1">宽</p>
-                  </div>
-                  <div>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0.1"
-                      value={formData.dimensions[2]}
-                      onChange={(e) => setFormData({ 
-                        ...formData, 
-                        dimensions: [formData.dimensions[0], formData.dimensions[1], parseFloat(e.target.value) || 1]
-                      })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 
-                               focus:ring-primary-500 focus:border-primary-500 text-center"
-                      placeholder="高"
-                    />
-                    <p className="text-xs text-gray-500 text-center mt-1">高</p>
-                  </div>
-                </div>
               </div>
             )}
 
@@ -1190,7 +1102,7 @@ const ModelEditModal: React.FC<ModelEditModalProps> = ({ model, categories, onCl
     name: model.name,
     category: model.category,
     description: model.description || '',
-    dimensions: (model.dimensions ? [...model.dimensions] : [1, 1, 1]) as [number, number, number],
+    cost: model.cost || 0, // 新增：成本金额
     previewImage: null as File | null,
     newGlbFile: null as File | null,
     gridTemplate: {
@@ -1292,7 +1204,7 @@ const ModelEditModal: React.FC<ModelEditModalProps> = ({ model, categories, onCl
         name: formData.name,
         category: formData.category,
         description: formData.description || undefined,
-        dimensions: supportGridTemplate(formData.category) ? undefined : formData.dimensions,
+        cost: formData.cost || undefined, // 添加成本金额
         gridTemplate: supportGridTemplate(formData.category) ? formData.gridTemplate : undefined
       }
 
@@ -1451,32 +1363,53 @@ const ModelEditModal: React.FC<ModelEditModalProps> = ({ model, categories, onCl
               />
             </div>
 
-            {/* 尺寸信息或格口模板配置 */}
-            {supportGridTemplate(formData.category) ? (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                成本金额 (元)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={formData.cost}
+                onChange={(e) => setFormData({ 
+                  ...formData, 
+                  cost: parseFloat(e.target.value) || 0
+                })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 
+                         focus:ring-primary-500 focus:border-primary-500"
+                placeholder="请输入模型成本金额"
+              />
+              <p className="text-xs text-gray-500 mt-1">请输入模型的采购或制作成本</p>
+            </div>
+
+            {/* 格口模板配置（仅限快递柜和货架） */}
+            {supportGridTemplate(formData.category) && (
               // 格口模板配置（用于快递柜和货架）
               <div className="border-t border-gray-200 pt-4">
                 <div className="flex items-center gap-2 mb-3">
                   <label className="block text-sm font-medium text-gray-700">
                     格口模板
                   </label>
-                  <label className="flex items-center">
                     <input
                       type="checkbox"
                       checked={formData.gridTemplate.enabled}
-                      onChange={(e) => setFormData(prev => ({
-                        ...prev,
-                        gridTemplate: { ...prev.gridTemplate, enabled: e.target.checked }
-                      }))}
-                      className="mr-2"
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      gridTemplate: {
+                        ...formData.gridTemplate,
+                        enabled: e.target.checked
+                      }
+                    })}
+                    className="rounded border-gray-300 text-primary-600 
+                             focus:ring-primary-500 focus:border-primary-500"
                     />
-                    <span className="text-sm text-gray-600">启用格口布局</span>
-                  </label>
+                  <span className="text-sm text-gray-600">启用格口模板</span>
                 </div>
                 
                 {formData.gridTemplate.enabled && (
-                  <div className="space-y-4">
-                    {/* 行列配置 */}
-                    <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="grid grid-cols-2 gap-4 mb-3">
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">
                           行数
@@ -1486,20 +1419,16 @@ const ModelEditModal: React.FC<ModelEditModalProps> = ({ model, categories, onCl
                           min="1"
                           max="20"
                           value={formData.gridTemplate.rows}
-                          onChange={(e) => setFormData(prev => {
-                            const newRows = parseInt(e.target.value) || 1
-                            const newTotalCells = newRows * prev.gridTemplate.columns
-                            return {
-                              ...prev,
+                          onChange={(e) => setFormData({
+                            ...formData,
                               gridTemplate: { 
-                                ...prev.gridTemplate, 
-                                rows: newRows,
-                                disabledCells: (prev.gridTemplate.disabledCells || []).filter(index => index < newTotalCells)
-                              }
+                              ...formData.gridTemplate,
+                              rows: parseInt(e.target.value) || 1,
+                              disabledCells: [] // 重置禁用格口
                             }
                           })}
-                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 
-                                   focus:ring-primary-500 focus:border-primary-500"
+                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded 
+                                   focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
                         />
                       </div>
                       <div>
@@ -1511,153 +1440,78 @@ const ModelEditModal: React.FC<ModelEditModalProps> = ({ model, categories, onCl
                           min="1"
                           max="20"
                           value={formData.gridTemplate.columns}
-                          onChange={(e) => setFormData(prev => {
-                            const newColumns = parseInt(e.target.value) || 1
-                            const newTotalCells = prev.gridTemplate.rows * newColumns
-                            return {
-                              ...prev,
+                          onChange={(e) => setFormData({
+                            ...formData,
                               gridTemplate: { 
-                                ...prev.gridTemplate, 
-                                columns: newColumns,
-                                disabledCells: (prev.gridTemplate.disabledCells || []).filter(index => index < newTotalCells)
-                              }
+                              ...formData.gridTemplate,
+                              columns: parseInt(e.target.value) || 1,
+                              disabledCells: [] // 重置禁用格口
                             }
                           })}
-                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 
-                                   focus:ring-primary-500 focus:border-primary-500"
+                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded 
+                                   focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
                         />
                       </div>
                     </div>
 
-                    {/* 可视化预览 */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="block text-xs font-medium text-gray-600">
-                          格口布局 ({formData.gridTemplate.rows}×{formData.gridTemplate.columns})
+                    <div className="mb-3">
+                      <label className="block text-xs font-medium text-gray-600 mb-2">
+                        点击格口设为禁用（灰色表示禁用）
                         </label>
-                        <div className="flex gap-1">
-                          <button
-                            type="button"
-                            onClick={() => setFormData(prev => ({
-                              ...prev,
-                              gridTemplate: { ...prev.gridTemplate, disabledCells: [] }
-                            }))}
-                            className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors"
-                            title="启用所有格口"
-                          >
-                            全启用
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setFormData(prev => ({
-                              ...prev,
-                              gridTemplate: { 
-                                ...prev.gridTemplate, 
-                                disabledCells: Array.from({ length: prev.gridTemplate.rows * prev.gridTemplate.columns }, (_, i) => i)
-                              }
-                            }))}
-                            className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
-                            title="禁用所有格口"
-                          >
-                            全禁用
-                          </button>
-                        </div>
-                      </div>
-                      <div className="p-3 bg-gray-50 rounded-lg border">
-                        <div 
-                          className="grid gap-1 max-w-xs mx-auto"
+                      <div 
+                        className="grid gap-1 border border-gray-300 rounded p-2 bg-gray-50"
                           style={{
                             gridTemplateColumns: `repeat(${formData.gridTemplate.columns}, 1fr)`,
-                            gridTemplateRows: `repeat(${formData.gridTemplate.rows}, 1fr)`
+                          maxWidth: '300px'
                           }}
                         >
                           {Array.from({ length: formData.gridTemplate.rows * formData.gridTemplate.columns }, (_, index) => {
                             const isDisabled = formData.gridTemplate.disabledCells?.includes(index) || false
                             const cellCode = generateCellCode(index, formData.gridTemplate.rows, formData.gridTemplate.columns)
                             return (
-                              <div
+                            <button
                                 key={index}
-                                onClick={() => handleCellClick(index)}
-                                className={`w-7 h-7 border border-gray-300 rounded flex items-center justify-center text-xs cursor-pointer transition-colors font-mono ${
-                                  isDisabled 
-                                    ? 'bg-red-500 text-white border-red-600 hover:bg-red-600' 
-                                    : 'bg-white text-gray-500 hover:bg-gray-100'
-                                }`}
-                                title={`格口${cellCode}号 - ${isDisabled ? '点击启用此格口' : '点击禁用此格口'}`}
+                              type="button"
+                              onClick={() => {
+                                const disabledCells = formData.gridTemplate.disabledCells || []
+                                const newDisabledCells = isDisabled
+                                  ? disabledCells.filter(i => i !== index)
+                                  : [...disabledCells, index]
+                                
+                                setFormData({
+                                  ...formData,
+                                  gridTemplate: {
+                                    ...formData.gridTemplate,
+                                    disabledCells: newDisabledCells
+                                  }
+                                })
+                              }}
+                              className={`
+                                w-8 h-8 text-xs font-medium rounded border
+                                ${isDisabled 
+                                  ? 'bg-gray-400 text-gray-600 border-gray-500' 
+                                  : 'bg-green-100 text-green-800 border-green-300 hover:bg-green-200'
+                                }
+                                transition-colors duration-150
+                              `}
+                              title={`格口 ${cellCode} - ${isDisabled ? '禁用' : '可用'}`}
                               >
                                 {cellCode}
-                              </div>
+                            </button>
                             )
                           })}
                         </div>
+                    </div>
+
                         <div className="mt-2 text-xs text-center">
                           <span className="text-gray-600">
                             已禁用 {formData.gridTemplate.disabledCells?.length || 0} 个格口 / 
                             可用 {formData.gridTemplate.rows * formData.gridTemplate.columns - (formData.gridTemplate.disabledCells?.length || 0)} 个格口
                           </span>
-                        </div>
-                      </div>
                     </div>
                   </div>
                 )}
 
-              </div>
-            ) : (
-              // 传统尺寸配置（用于建筑等其他类型）
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  模型尺寸 (长×宽×高，单位：米)
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0.1"
-                      value={formData.dimensions[0]}
-                      onChange={(e) => setFormData({ 
-                        ...formData, 
-                        dimensions: [parseFloat(e.target.value) || 1, formData.dimensions[1], formData.dimensions[2]]
-                      })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 
-                               focus:ring-primary-500 focus:border-primary-500 text-center"
-                      placeholder="长"
-                    />
-                    <p className="text-xs text-gray-500 text-center mt-1">长</p>
-                  </div>
-                  <div>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0.1"
-                      value={formData.dimensions[1]}
-                      onChange={(e) => setFormData({ 
-                        ...formData, 
-                        dimensions: [formData.dimensions[0], parseFloat(e.target.value) || 1, formData.dimensions[2]]
-                      })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 
-                               focus:ring-primary-500 focus:border-primary-500 text-center"
-                      placeholder="宽"
-                    />
-                    <p className="text-xs text-gray-500 text-center mt-1">宽</p>
-                  </div>
-                  <div>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0.1"
-                      value={formData.dimensions[2]}
-                      onChange={(e) => setFormData({ 
-                        ...formData, 
-                        dimensions: [formData.dimensions[0], formData.dimensions[1], parseFloat(e.target.value) || 1]
-                      })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 
-                               focus:ring-primary-500 focus:border-primary-500 text-center"
-                      placeholder="高"
-                    />
-                    <p className="text-xs text-gray-500 text-center mt-1">高</p>
-                  </div>
-                </div>
               </div>
             )}
 

@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from 'react'
 import { ThreeEvent } from '@react-three/fiber'
 // import { useBox } from '@react-three/cannon' // 已禁用物理引擎但保留导入以备后用
-import { Box, Text } from '@react-three/drei'
+import { Box, Text, Plane } from '@react-three/drei'
 import { useProjectStore } from '../lib/state/projectStore'
 import SceneObject from './SceneObject'
 import GLBModel from './GLBModel'
 import { indexedDBStorage, ModelData } from '../lib/storage/indexedDB'
 
-const Scene3D: React.FC = () => {
+interface Scene3DProps {
+  showWalls?: boolean
+  wallOpacity?: number
+}
+
+const Scene3D: React.FC<Scene3DProps> = ({ showWalls = false, wallOpacity = 0.7 }) => {
   const { 
     currentProject, 
     previewMode, 
@@ -19,7 +24,7 @@ const Scene3D: React.FC = () => {
   } = useProjectStore()
 
   const [previewModelUrl, setPreviewModelUrl] = useState<string | null>(null)
-  const [isLoadingPreview, setIsLoadingPreview] = useState(false)
+
 
   if (!currentProject) return null
 
@@ -49,7 +54,6 @@ const Scene3D: React.FC = () => {
     })
 
     if (previewMode && previewObject && previewObject.metadata?.isAdminModel && previewObject.metadata?.adminModelId) {
-      setIsLoadingPreview(true)
       console.log('Scene3D开始从IndexedDB加载预览GLB模型:', previewObject.metadata.adminModelId)
       
       // 从IndexedDB动态读取模型数据 - 优化版本
@@ -80,8 +84,6 @@ const Scene3D: React.FC = () => {
         } catch (error) {
           console.error('从IndexedDB加载预览模型失败:', error)
           setPreviewModelUrl(null)
-        } finally {
-          setIsLoadingPreview(false)
         }
       }
       
@@ -89,7 +91,7 @@ const Scene3D: React.FC = () => {
     } else {
       console.log('不是admin预览模型或没有adminModelId')
       setPreviewModelUrl(null)
-      setIsLoadingPreview(false)
+
     }
     
     // 清理函数：释放之前创建的Blob URL
@@ -121,22 +123,42 @@ const Scene3D: React.FC = () => {
     return defaultDimensions[previewObject.model] || [1, 1, 1]
   }
 
-  // 处理场景点击事件
-  const handleSceneClick = (event: ThreeEvent<MouseEvent>) => {
+  // 处理主地板点击事件 - 只处理主地板范围内的点击
+  const handleMainFloorClick = (event: ThreeEvent<MouseEvent>) => {
     event.stopPropagation()
     
+    if (previewMode && previewObject) {
+      const clickPosition = event.point
+      
+      // 检查是否在主地板范围内
+      if (clickPosition.x >= 0 && clickPosition.x <= length && 
+          clickPosition.z >= 0 && clickPosition.z <= width) {
+        handleSceneClick(event)
+      }
+    } else {
+      handleSceneClick(event)
+    }
+  }
+
+  // 处理场景点击事件
+  const handleSceneClick = (event: ThreeEvent<MouseEvent>) => {
     if (previewMode && previewObject) {
       // 预览模式：放置对象
     const clickPosition = event.point
     const [previewWidth, previewHeight, previewDepth] = getPreviewDimensions()
       const isAdminModel = previewObject.metadata?.isAdminModel
     
-      // 确保对象在场地范围内 - 区分GLB模型和Box模型的Y坐标
+      // 确保对象在扩展地板范围内 - 包含3米外围区域
+    const extendedMinX = -3 + previewWidth / 2
+    const extendedMaxX = length + 3 - previewWidth / 2
+    const extendedMinZ = -3 + previewDepth / 2
+    const extendedMaxZ = width + 3 - previewDepth / 2
+    
     const clampedPosition: [number, number, number] = [
-      Math.max(previewWidth / 2, Math.min(length - previewWidth / 2, clickPosition.x)),
+      Math.max(extendedMinX, Math.min(extendedMaxX, clickPosition.x)),
         // GLB模型使用Y=0让底部贴地，Box模型使用height/2让中心点位于地面之上
         isAdminModel ? 0 : previewHeight / 2,
-      Math.max(previewDepth / 2, Math.min(width - previewDepth / 2, clickPosition.z))
+      Math.max(extendedMinZ, Math.min(extendedMaxZ, clickPosition.z))
     ]
     
     placePreviewObject(clampedPosition)
@@ -168,12 +190,17 @@ const Scene3D: React.FC = () => {
     const [previewWidth, previewHeight, previewDepth] = getPreviewDimensions()
     const isAdminModel = previewObject.metadata?.isAdminModel
     
-    // 更新预览位置 - 区分GLB模型和Box模型的Y坐标
+    // 更新预览位置 - 包含3米外围扩展区域
+    const extendedMinX = -3 + previewWidth / 2
+    const extendedMaxX = length + 3 - previewWidth / 2
+    const extendedMinZ = -3 + previewDepth / 2
+    const extendedMaxZ = width + 3 - previewDepth / 2
+    
     const clampedPosition: [number, number, number] = [
-      Math.max(previewWidth / 2, Math.min(length - previewWidth / 2, movePosition.x)),
+      Math.max(extendedMinX, Math.min(extendedMaxX, movePosition.x)),
       // GLB模型使用Y=0让底部贴地，Box模型使用height/2让中心点位于地面之上
       isAdminModel ? 0 : previewHeight / 2,
-      Math.max(previewDepth / 2, Math.min(width - previewDepth / 2, movePosition.z))
+      Math.max(extendedMinZ, Math.min(extendedMaxZ, movePosition.z))
     ]
     
     updatePreviewPosition(clampedPosition)
@@ -186,11 +213,189 @@ const Scene3D: React.FC = () => {
         args={[length, 0.2, width]} 
         position={[length / 2, -0.1, width / 2]}
         receiveShadow
-        onClick={handleSceneClick}
+        onClick={handleMainFloorClick}
         onPointerMove={handlePointerMove}
       >
         <meshStandardMaterial color="#e5e7eb" />
       </Box>
+
+      {/* 扩展透明地板区域 - 驿站外围3米区域，使用正方形网格 */}
+      <group>
+        {/* 扩展区域的点击平面 - 分别处理4个扩展区域 */}
+        {/* 前方扩展点击区域 */}
+        <Plane 
+          args={[length + 6, 3]} 
+          position={[length / 2, -0.05, -1.5]}
+          rotation={[-Math.PI / 2, 0, 0]}
+          onClick={handleSceneClick}
+          onPointerMove={handlePointerMove}
+        >
+          <meshStandardMaterial 
+            color="#f3f4f6" 
+            transparent 
+            opacity={0}
+            visible={true}
+          />
+        </Plane>
+        
+        {/* 后方扩展点击区域 */}
+        <Plane 
+          args={[length + 6, 3]} 
+          position={[length / 2, -0.05, width + 1.5]}
+          rotation={[-Math.PI / 2, 0, 0]}
+          onClick={handleSceneClick}
+          onPointerMove={handlePointerMove}
+        >
+          <meshStandardMaterial 
+            color="#f3f4f6" 
+            transparent 
+            opacity={0}
+            visible={true}
+          />
+        </Plane>
+        
+        {/* 左侧扩展点击区域 */}
+        <Plane 
+          args={[3, width]} 
+          position={[-1.5, -0.05, width / 2]}
+          rotation={[-Math.PI / 2, 0, 0]}
+          onClick={handleSceneClick}
+          onPointerMove={handlePointerMove}
+        >
+          <meshStandardMaterial 
+            color="#f3f4f6" 
+            transparent 
+            opacity={0}
+            visible={true}
+          />
+        </Plane>
+        
+        {/* 右侧扩展点击区域 */}
+        <Plane 
+          args={[3, width]} 
+          position={[length + 1.5, -0.05, width / 2]}
+          rotation={[-Math.PI / 2, 0, 0]}
+          onClick={handleSceneClick}
+          onPointerMove={handlePointerMove}
+        >
+          <meshStandardMaterial 
+            color="#f3f4f6" 
+            transparent 
+            opacity={0}
+            visible={true}
+          />
+        </Plane>
+        
+        {/* 视觉网格平面 - 分成4个区域避免与主地板重叠 */}
+        {/* 前方扩展区域 */}
+        <Plane 
+          args={[length + 6, 3]} 
+          position={[length / 2, 0.001, -1.5]}
+          rotation={[-Math.PI / 2, 0, 0]}
+          receiveShadow
+        >
+          <meshStandardMaterial 
+            color="#f3f4f6" 
+            transparent 
+            opacity={0.4}
+          />
+        </Plane>
+        
+        {/* 后方扩展区域 */}
+        <Plane 
+          args={[length + 6, 3]} 
+          position={[length / 2, 0.001, width + 1.5]}
+          rotation={[-Math.PI / 2, 0, 0]}
+          receiveShadow
+        >
+          <meshStandardMaterial 
+            color="#f3f4f6" 
+            transparent 
+            opacity={0.4}
+          />
+        </Plane>
+        
+        {/* 左侧扩展区域 */}
+        <Plane 
+          args={[3, width]} 
+          position={[-1.5, 0.001, width / 2]}
+          rotation={[-Math.PI / 2, 0, 0]}
+          receiveShadow
+        >
+          <meshStandardMaterial 
+            color="#f3f4f6" 
+            transparent 
+            opacity={0.4}
+          />
+        </Plane>
+        
+        {/* 右侧扩展区域 */}
+        <Plane 
+          args={[3, width]} 
+          position={[length + 1.5, 0.001, width / 2]}
+          rotation={[-Math.PI / 2, 0, 0]}
+          receiveShadow
+        >
+          <meshStandardMaterial 
+            color="#f3f4f6" 
+            transparent 
+            opacity={0.4}
+          />
+        </Plane>
+        
+        {/* 网格线 - 垂直线（覆盖整个扩展区域）*/}
+        {Array.from({ length: Math.floor((length + 6) / 1) + 1 }, (_, i) => {
+          const x = -3 + i * 1
+          return (
+            <Box
+              key={`vertical-${i}`}
+              args={[0.02, 0.01, width + 6]}
+              position={[x, 0.002, width / 2]}
+            >
+              <meshStandardMaterial 
+                color="#d1d5db" 
+                transparent 
+                opacity={0.6}
+              />
+            </Box>
+          )
+        })}
+        
+        {/* 网格线 - 水平线（覆盖整个扩展区域）*/}
+        {Array.from({ length: Math.floor((width + 6) / 1) + 1 }, (_, i) => {
+          const z = -3 + i * 1
+          return (
+            <Box
+              key={`horizontal-${i}`}
+              args={[length + 6, 0.01, 0.02]}
+              position={[length / 2, 0.002, z]}
+            >
+              <meshStandardMaterial 
+                color="#d1d5db" 
+                transparent 
+                opacity={0.6}
+              />
+            </Box>
+          )
+        })}
+        
+        {/* 驿站区域边界标识 - 更明显的边框 */}
+        <group>
+          {/* 四个边界 */}
+          <Box args={[length, 0.02, 0.08]} position={[length / 2, 0.003, 0]}>
+            <meshStandardMaterial color="#9ca3af" />
+          </Box>
+          <Box args={[length, 0.02, 0.08]} position={[length / 2, 0.003, width]}>
+            <meshStandardMaterial color="#9ca3af" />
+          </Box>
+          <Box args={[0.08, 0.02, width]} position={[0, 0.003, width / 2]}>
+            <meshStandardMaterial color="#9ca3af" />
+          </Box>
+          <Box args={[0.08, 0.02, width]} position={[length, 0.003, width / 2]}>
+            <meshStandardMaterial color="#9ca3af" />
+          </Box>
+        </group>
+      </group>
 
       {/* 场地边界线 */}
       <group>
@@ -208,6 +413,31 @@ const Scene3D: React.FC = () => {
           <meshStandardMaterial color="#6b7280" />
         </Box>
       </group>
+
+      {/* 场地墙壁 - 四面半透明墙壁 */}
+      {showWalls && (
+        <group>
+          {[
+            /* 前墙 */ { args: [length, height, 0.1], position: [length / 2, height / 2, -0.05] },
+            /* 后墙 */ { args: [length, height, 0.1], position: [length / 2, height / 2, width + 0.05] },
+            /* 左墙 */ { args: [0.1, height, width], position: [-0.05, height / 2, width / 2] },
+            /* 右墙 */ { args: [0.1, height, width], position: [length + 0.05, height / 2, width / 2] }
+          ].map((wall, index) => (
+            <Box 
+              key={index}
+              args={wall.args as [number, number, number]} 
+              position={wall.position as [number, number, number]}
+            >
+              <meshStandardMaterial 
+                color="#e5e7eb" 
+                transparent 
+                opacity={wallOpacity}
+                roughness={0.7}
+              />
+            </Box>
+          ))}
+        </group>
+      )}
 
       {/* 场地标注 */}
       <Text
@@ -243,7 +473,7 @@ const Scene3D: React.FC = () => {
                   key="preview-glb-model"
                   modelUrl={previewModelUrl}
                   position={previewPosition}
-                  rotation={[0, 0, 0]}
+                  rotation={[0, ((previewObject.initialRotation || 0) * Math.PI) / 180, 0]}
                   scale={[1, 1, 1]}
                   dragging={false}
                   isPreview={true}
@@ -256,6 +486,7 @@ const Scene3D: React.FC = () => {
             key="preview-box-model"
           args={getPreviewDimensions()}
           position={previewPosition}
+          rotation={[0, ((previewObject.initialRotation || 0) * Math.PI) / 180, 0]}
           castShadow
         >
           <meshStandardMaterial 

@@ -1,9 +1,9 @@
 import React from 'react'
-import { Package, TrendingUp, BarChart3 } from 'lucide-react'
+import { Package, TrendingUp, BarChart3, Settings } from 'lucide-react'
 
 interface SideMenuProps {
-  activeMenu: 'objects' | 'traffic' | 'statistics'
-  onMenuChange: (menu: 'objects' | 'traffic' | 'statistics') => void
+  activeMenu: 'objects' | 'traffic' | 'statistics' | 'simulation' | null
+  onMenuChange: (menu: 'objects' | 'traffic' | 'statistics' | 'simulation' | null) => void
 }
 
 const SideMenu: React.FC<SideMenuProps> = ({ activeMenu, onMenuChange }) => {
@@ -17,8 +17,14 @@ const SideMenu: React.FC<SideMenuProps> = ({ activeMenu, onMenuChange }) => {
     {
       id: 'traffic' as const,
       icon: TrendingUp,
-      label: '流量配置',
-      description: '配置流量参数'
+      label: '成本计算',
+      description: '管理业务流程配置'
+    },
+    {
+      id: 'simulation' as const,
+      icon: Settings,
+      label: '仿真配置',
+      description: '配置仿真运行参数'
     },
     {
       id: 'statistics' as const,
@@ -29,7 +35,7 @@ const SideMenu: React.FC<SideMenuProps> = ({ activeMenu, onMenuChange }) => {
   ]
 
   return (
-    <div className="w-16 h-full bg-gray-100 flex flex-col items-center py-4 border-r border-gray-200">
+    <div className="w-16 h-full bg-gray-100 flex flex-col items-center py-4 border-r border-gray-200 relative">
       <div className="space-y-2">
         {menuItems.map((item) => {
           const Icon = item.icon
@@ -38,7 +44,7 @@ const SideMenu: React.FC<SideMenuProps> = ({ activeMenu, onMenuChange }) => {
           return (
             <button
               key={item.id}
-              onClick={() => onMenuChange(item.id)}
+              onClick={() => onMenuChange(activeMenu === item.id ? null : item.id)}
               className={`
                 w-12 h-12 rounded-lg flex items-center justify-center
                 transition-all duration-200 group relative
@@ -69,12 +75,14 @@ const SideMenu: React.FC<SideMenuProps> = ({ activeMenu, onMenuChange }) => {
       </div>
       
       {/* 激活指示器 */}
+      {activeMenu && (
       <div className="absolute left-0 w-1 bg-primary-600 rounded-r transition-all duration-300"
            style={{
              height: '48px',
              top: `${16 + menuItems.findIndex(item => item.id === activeMenu) * 56}px`
            }}>
       </div>
+      )}
     </div>
   )
 }

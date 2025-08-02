@@ -16,6 +16,7 @@ interface ModelData {
   id: string
   name: string
   category: string
+  cost?: number // 模型价格
   gridTemplate?: GridTemplate
 }
 
@@ -87,35 +88,38 @@ const SlotVisualization: React.FC<{ template: GridTemplate; modelData: ModelData
           格口布局图
         </div>
         <div className="border border-gray-300 rounded-lg p-3 bg-white">
-          <div 
-            className="grid gap-1 mx-auto"
-            style={{
-              gridTemplateColumns: `repeat(${template.columns}, 1fr)`,
-              maxWidth: `${Math.min(template.columns * 32, 400)}px`
-            }}
-          >
-                         {Array.from({ length: totalSlots }, (_, index) => {
-               const isDisabled = template.disabledCells?.includes(index) || false
-               const cellCode = generateCellCode(index, template.rows, template.columns, isCabinet)
-              
-              return (
-                <div
-                  key={index}
-                  className={`
-                    w-8 h-6 rounded flex items-center justify-center text-xs font-medium border transition-all
-                    ${isDisabled 
-                      ? 'bg-gray-300 text-gray-500 border-gray-400 opacity-50' // 禁用格口：灰色半透明
-                      : isCabinet
-                        ? 'bg-blue-100 text-blue-700 border-blue-300 hover:bg-blue-200' // 快递柜：蓝色系
-                        : 'bg-green-100 text-green-700 border-green-300 hover:bg-green-200' // 货架：绿色系
-                    }
-                  `}
-                  title={`格口 ${cellCode} ${isDisabled ? '(已禁用)' : '(可用)'}`}
-                >
-                  {cellCode}
-                </div>
-              )
-            })}
+          <div className="overflow-x-auto">
+            <div 
+              className="grid gap-1"
+              style={{
+                gridTemplateColumns: `repeat(${template.columns}, 1fr)`,
+                minWidth: `${template.columns * 32}px`,
+                width: 'max-content'
+              }}
+            >
+              {Array.from({ length: totalSlots }, (_, index) => {
+                const isDisabled = template.disabledCells?.includes(index) || false
+                const cellCode = generateCellCode(index, template.rows, template.columns, isCabinet)
+               
+                return (
+                  <div
+                    key={index}
+                    className={`
+                      w-8 h-6 rounded flex items-center justify-center text-xs font-medium border transition-all
+                      ${isDisabled 
+                        ? 'bg-gray-300 text-gray-500 border-gray-400 opacity-50' // 禁用格口：灰色半透明
+                        : isCabinet
+                          ? 'bg-blue-100 text-blue-700 border-blue-300 hover:bg-blue-200' // 快递柜：蓝色系
+                          : 'bg-green-100 text-green-700 border-green-300 hover:bg-green-200' // 货架：绿色系
+                      }
+                    `}
+                    title={`格口 ${cellCode} ${isDisabled ? '(已禁用)' : '(可用)'}`}
+                  >
+                    {cellCode}
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </div>
       </div>
@@ -150,6 +154,8 @@ const PropertiesPanel: React.FC = () => {
 
   // 判断是否为管理后台上传的模型
   const isAdminModel = obj.metadata?.isAdminModel || false
+  
+  // 判断是否为管理后台上传的模型
 
   // 从IndexedDB加载真实的格口模板数据
   useEffect(() => {
@@ -165,25 +171,36 @@ const PropertiesPanel: React.FC = () => {
         await indexedDBStorage.init()
         const adminModelData = await indexedDBStorage.getModelById(obj.metadata.adminModelId)
         
-        if (adminModelData && adminModelData.gridTemplate) {
-          console.log('加载格口模板数据:', {
+        if (adminModelData) {
+          console.log('加载模型数据:', {
             modelId: adminModelData.id,
             modelName: adminModelData.name,
             category: adminModelData.category,
-            gridTemplate: adminModelData.gridTemplate
+            cost: adminModelData.cost,
+            hasGridTemplate: !!adminModelData.gridTemplate
           })
           
-          setGridTemplate(adminModelData.gridTemplate)
+          // 设置格口模板（如果存在）
+          setGridTemplate(adminModelData.gridTemplate || null)
+          
+          // 始终设置模型数据（包括价格等基本信息）
           setModelData({
             id: adminModelData.id,
             name: adminModelData.name,
             category: adminModelData.category,
+            cost: adminModelData.cost, // 加载价格信息
             gridTemplate: adminModelData.gridTemplate
           })
+          
+          console.log('PropertiesPanel 成功加载模型数据:', {
+            modelId: adminModelData.id,
+            modelName: adminModelData.name,
+            modelCategory: adminModelData.category,
+            modelCost: adminModelData.cost,
+            hasGridTemplate: !!adminModelData.gridTemplate
+          })
         } else {
-          console.log('模型未配置格口模板或模型不存在:', {
-            hasModel: !!adminModelData,
-            hasGridTemplate: !!(adminModelData?.gridTemplate),
+          console.log('模型不存在:', {
             modelId: obj.metadata.adminModelId
           })
           setGridTemplate(null)
@@ -257,6 +274,21 @@ const PropertiesPanel: React.FC = () => {
           <div className="text-gray-900 font-medium">
             {modelData?.name || obj.metadata?.adminModelName || obj.model}
           </div>
+
+          {/* 价格信息 - 仅对管理后台模型显示 */}
+          {isAdminModel && (
+            <>
+              <div className="text-sm text-gray-600 mb-1 mt-2">价格</div>
+              <div className="text-gray-900 font-medium">
+                {isLoadingTemplate 
+                  ? '加载中...' 
+                  : modelData?.cost !== undefined 
+                    ? `¥${modelData.cost.toLocaleString()}`
+                    : '未设置'
+                }
+              </div>
+            </>
+          )}
           </div>
         </div>
 
@@ -332,107 +364,107 @@ const PropertiesPanel: React.FC = () => {
           ) : (
             /* 元数据编辑 - 对其他对象或未配置格口模板的对象显示传统属性面板 */
             obj.metadata && (
-              <div>
-              <h3 className="text-gray-900 font-medium mb-3">属性</h3>
-                <div className="space-y-3">
-                {obj.metadata.capacity && (
-                    <div>
-                      <label className="block text-sm text-gray-600 mb-1">
-                        容量
-                      </label>
-                      <input
-                        type="number"
-                        value={obj.metadata.capacity}
-                        onChange={(e) => handleMetadataChange('capacity', parseInt(e.target.value) || 0)}
-                        className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded 
-                                 text-gray-900 focus:outline-none focus:border-primary-500"
-                      />
-                    </div>
-                  )}
-                  
-                {obj.metadata.layers && (
-                    <div>
-                      <label className="block text-sm text-gray-600 mb-1">
-                        层数
-                      </label>
-                      <input
-                        type="number"
-                        value={obj.metadata.layers}
-                        onChange={(e) => handleMetadataChange('layers', parseInt(e.target.value) || 1)}
-                        min="1"
+            <div>
+            <h3 className="text-gray-900 font-medium mb-3">属性</h3>
+              <div className="space-y-3">
+              {obj.metadata.capacity && (
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">
+                      容量
+                    </label>
+                    <input
+                      type="number"
+                      value={obj.metadata.capacity}
+                      onChange={(e) => handleMetadataChange('capacity', parseInt(e.target.value) || 0)}
                       className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded 
                                text-gray-900 focus:outline-none focus:border-primary-500"
                     />
                   </div>
                 )}
-
-                {obj.metadata.width && (
+                
+              {obj.metadata.layers && (
                   <div>
                     <label className="block text-sm text-gray-600 mb-1">
-                      宽度 (m)
+                      层数
                     </label>
                     <input
                       type="number"
-                      value={obj.metadata.width}
-                      onChange={(e) => handleMetadataChange('width', parseFloat(e.target.value) || 1)}
-                      step="0.1"
-                      min="0.1"
-                      className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded 
-                               text-gray-900 focus:outline-none focus:border-primary-500"
-                    />
-                  </div>
-                )}
-
-                {obj.metadata.height && (
-                  <div>
-                    <label className="block text-sm text-gray-600 mb-1">
-                      高度 (m)
-                    </label>
-                    <input
-                      type="number"
-                      value={obj.metadata.height}
-                      onChange={(e) => handleMetadataChange('height', parseFloat(e.target.value) || 1)}
-                      step="0.1"
-                      min="0.1"
-                      className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded 
-                               text-gray-900 focus:outline-none focus:border-primary-500"
-                    />
-                  </div>
-                )}
-
-                {obj.metadata.depth && (
-                  <div>
-                    <label className="block text-sm text-gray-600 mb-1">
-                      深度 (m)
-                    </label>
-                    <input
-                      type="number"
-                      value={obj.metadata.depth}
-                      onChange={(e) => handleMetadataChange('depth', parseFloat(e.target.value) || 1)}
-                      step="0.1"
-                      min="0.1"
-                        className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded 
-                                 text-gray-900 focus:outline-none focus:border-primary-500"
-                      />
-                    </div>
-                  )}
-
-                  {(obj.metadata as any)?.description && (
-                    <div>
-                      <label className="block text-sm text-gray-600 mb-1">
-                        描述
-                      </label>
-                      <textarea
-                        value={(obj.metadata as any).description}
-                        onChange={(e) => handleMetadataChange('description', e.target.value)}
-                        rows={3}
-                        className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded 
-                                 text-gray-900 resize-none focus:outline-none focus:border-primary-500"
-                      />
-                    </div>
-                  )}
+                      value={obj.metadata.layers}
+                      onChange={(e) => handleMetadataChange('layers', parseInt(e.target.value) || 1)}
+                      min="1"
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded 
+                             text-gray-900 focus:outline-none focus:border-primary-500"
+                  />
                 </div>
+              )}
+
+              {obj.metadata.width && (
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">
+                    宽度 (m)
+                  </label>
+                  <input
+                    type="number"
+                    value={obj.metadata.width}
+                    onChange={(e) => handleMetadataChange('width', parseFloat(e.target.value) || 1)}
+                    step="0.1"
+                    min="0.1"
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded 
+                             text-gray-900 focus:outline-none focus:border-primary-500"
+                  />
+                </div>
+              )}
+
+              {obj.metadata.height && (
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">
+                    高度 (m)
+                  </label>
+                  <input
+                    type="number"
+                    value={obj.metadata.height}
+                    onChange={(e) => handleMetadataChange('height', parseFloat(e.target.value) || 1)}
+                    step="0.1"
+                    min="0.1"
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded 
+                             text-gray-900 focus:outline-none focus:border-primary-500"
+                  />
+                </div>
+              )}
+
+              {obj.metadata.depth && (
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">
+                    深度 (m)
+                  </label>
+                  <input
+                    type="number"
+                    value={obj.metadata.depth}
+                    onChange={(e) => handleMetadataChange('depth', parseFloat(e.target.value) || 1)}
+                    step="0.1"
+                    min="0.1"
+                      className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded 
+                               text-gray-900 focus:outline-none focus:border-primary-500"
+                    />
+                  </div>
+                )}
+
+                {(obj.metadata as any)?.description && (
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">
+                      描述
+                    </label>
+                    <textarea
+                      value={(obj.metadata as any).description}
+                      onChange={(e) => handleMetadataChange('description', e.target.value)}
+                      rows={3}
+                      className="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded 
+                               text-gray-900 resize-none focus:outline-none focus:border-primary-500"
+                    />
+                  </div>
+                )}
               </div>
+            </div>
             )
           )}
       </div>

@@ -3,12 +3,15 @@ import { Canvas } from '@react-three/fiber'
 import { OrbitControls, Grid, Sky } from '@react-three/drei'
 // import { Physics } from '@react-three/cannon' // 已禁用物理引擎但保留导入以备后用
 import Toolbar from './Toolbar'
-import ObjectPalette from './ObjectPalette'
 import SideMenu from './SideMenu'
+import ObjectPalette from './ObjectPalette'
 import TrafficPanel from './TrafficPanel'
+import SimulationPanel from './SimulationPanel'
 import StatisticsPanel from './StatisticsPanel'
-import Scene3D from './Scene3D'
 import PropertiesPanel from './PropertiesPanel'
+import BusinessConfigPanel from './BusinessConfigPanel'
+import SimulationConfigPanel from './SimulationConfigPanel'
+import Scene3D from './Scene3D'
 import FPSControls from './FPSControls'
 import { useProjectStore } from '../lib/state/projectStore'
 
@@ -20,16 +23,49 @@ const SceneEditor: React.FC<SceneEditorProps> = ({ onBackToProjects }) => {
   const { currentProject, selectedObjects, previewMode, cancelPreview, clearSelection } = useProjectStore()
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [showGrid, setShowGrid] = useState(true)
+  const [showWalls, setShowWalls] = useState(false)
+  const [wallOpacity, setWallOpacity] = useState(0.7)
   const [cameraMode, setCameraMode] = useState<'orbit' | 'fps'>('orbit')
-  const [activeMenu, setActiveMenu] = useState<'objects' | 'traffic' | 'statistics'>('objects')
+  const [activeMenu, setActiveMenu] = useState<'objects' | 'traffic' | 'statistics' | 'simulation' | null>('objects')
+  const [businessConfig, setBusinessConfig] = useState<{
+    isOpen: boolean
+    configType: 'operation' | 'staff' | 'package' | 'items' | null
+  }>({ isOpen: false, configType: null })
+  
+  const [simulationConfig, setSimulationConfig] = useState<{
+    isOpen: boolean
+    configType: 'package-flow' | 'community' | null
+  }>({ isOpen: false, configType: null })
 
   // 渲染左侧面板内容
   const renderLeftPanel = () => {
+    if (activeMenu === null) {
+      return null // 不渲染任何内容
+    }
+    
     switch (activeMenu) {
       case 'objects':
         return <ObjectPalette />
       case 'traffic':
-        return <TrafficPanel />
+        return <TrafficPanel 
+          onConfigClick={(configType) => {
+            // 关闭其他配置和清除选中对象
+            setSimulationConfig({ isOpen: false, configType: null })
+            clearSelection()
+            setBusinessConfig({ isOpen: true, configType })
+          }}
+          selectedConfig={businessConfig.isOpen ? businessConfig.configType : null}
+        />
+      case 'simulation':
+        return <SimulationPanel 
+          onConfigClick={(configType) => {
+            // 关闭其他配置和清除选中对象
+            setBusinessConfig({ isOpen: false, configType: null })
+            clearSelection()
+            setSimulationConfig({ isOpen: true, configType })
+          }}
+          selectedConfig={simulationConfig.isOpen ? simulationConfig.configType : null}
+        />
       case 'statistics':
         return <StatisticsPanel />
       default:
@@ -59,6 +95,15 @@ const SceneEditor: React.FC<SceneEditorProps> = ({ onBackToProjects }) => {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [previewMode, cancelPreview, selectedObjects, clearSelection])
+
+  // 监听对象选中变化，选中对象时关闭配置面板
+  useEffect(() => {
+    if (selectedObjects.length > 0) {
+      // 有对象被选中时，关闭所有配置面板
+      setBusinessConfig({ isOpen: false, configType: null })
+      setSimulationConfig({ isOpen: false, configType: null })
+    }
+  }, [selectedObjects])
 
   if (!currentProject) {
     return (
@@ -107,22 +152,25 @@ const SceneEditor: React.FC<SceneEditorProps> = ({ onBackToProjects }) => {
         onToggleGrid={setShowGrid}
         cameraMode={cameraMode}
         onChangeCameraMode={setCameraMode}
+        showWalls={showWalls}
+        onToggleWalls={setShowWalls}
       />
 
       <div className="flex-1 flex overflow-hidden">
-        {/* 左侧菜单系统 */}
-        <div className="flex h-full">
-          {/* 父级菜单 */}
+        {/* 左侧菜单 - 固定显示 */}
           <SideMenu activeMenu={activeMenu} onMenuChange={setActiveMenu} />
           
-          {/* 内容面板 */}
-          <div className="w-56 h-full bg-white border-r border-gray-200 flex flex-col">
+        {/* 3D场景区域 - 占据剩余空间 */}
+        <div className="flex-1 relative min-w-0">
+          {/* 左侧悬浮面板 */}
+          {activeMenu && (
+            <div className="absolute top-0 left-0 h-full z-10">
+              <div className="w-56 h-full bg-white border-r border-gray-200 shadow-lg flex flex-col">
             {renderLeftPanel()}
           </div>
         </div>
+          )}
 
-        {/* 3D场景区域 */}
-        <div className="flex-1 relative min-w-0">
           {/* 预览模式提示 - 移到视图上方 */}
           {previewMode && (
             <div className="absolute top-4 left-1/2 transform -translate-x-1/2 
@@ -134,12 +182,48 @@ const SceneEditor: React.FC<SceneEditorProps> = ({ onBackToProjects }) => {
             </div>
           )}
 
-          {/* 右侧属性面板 - 绝对定位覆盖 */}
-          {selectedObjects.length > 0 && (
-            <div className="absolute top-0 right-0 h-full z-20">
-              <PropertiesPanel />
-            </div>
-          )}
+          {/* 右侧面板 - 互斥显示，优先级：配置面板 > 属性面板 */}
+          {(() => {
+            // 仿真配置面板优先级最高
+            if (simulationConfig.isOpen && simulationConfig.configType) {
+              return (
+                <div className="absolute top-0 right-0 h-full z-20">
+                  <SimulationConfigPanel 
+                    configType={simulationConfig.configType}
+                    onClose={() => setSimulationConfig({ isOpen: false, configType: null })}
+                  />
+                </div>
+              )
+            }
+            
+            // 成本计算面板次之
+            if (businessConfig.isOpen && businessConfig.configType) {
+              return (
+                <div className="absolute top-0 right-0 h-full z-20">
+                  <BusinessConfigPanel 
+                    configType={businessConfig.configType}
+                    onClose={() => setBusinessConfig({ isOpen: false, configType: null })}
+                    onNavigateToSimulation={(configType) => {
+                      // 关闭成本计算面板，打开仿真配置面板
+                      setBusinessConfig({ isOpen: false, configType: null })
+                      setSimulationConfig({ isOpen: true, configType })
+                    }}
+                  />
+                </div>
+              )
+            }
+            
+            // 属性面板优先级最低，只有在没有配置面板时才显示
+            if (selectedObjects.length > 0) {
+              return (
+                <div className="absolute top-0 right-0 h-full z-20">
+                  <PropertiesPanel />
+                </div>
+              )
+            }
+            
+            return null
+          })()}
 
           <Canvas
             ref={canvasRef}
@@ -171,7 +255,7 @@ const SceneEditor: React.FC<SceneEditorProps> = ({ onBackToProjects }) => {
           >
             <Suspense fallback={null}>
               {/* 照明系统 */}
-              <ambientLight intensity={0.4} />
+              <ambientLight intensity={0.6} />
               <directionalLight
                 position={[length / 2, height * 2, width / 2]}
                 intensity={1}
@@ -201,7 +285,7 @@ const SceneEditor: React.FC<SceneEditorProps> = ({ onBackToProjects }) => {
                 }}
               > */}
                 {/* 主场景 */}
-                <Scene3D />
+                <Scene3D showWalls={showWalls} wallOpacity={wallOpacity} />
               {/* </Physics> */}
 
               {/* 网格辅助线 */}
@@ -246,7 +330,34 @@ const SceneEditor: React.FC<SceneEditorProps> = ({ onBackToProjects }) => {
             </Suspense>
           </Canvas>
         </div>
+
       </div>
+
+      {/* 墙壁透明度控制滑块 - 定位在3D场景区域内，避免与左侧面板重叠 */}
+      {showWalls && (
+        <div className="absolute bottom-5 left-80 bg-white/95 p-3 rounded-lg shadow-lg z-50 min-w-[200px]
+                      transition-all duration-200 ease-in-out">
+          <div className="text-sm font-medium text-gray-700 mb-2">
+            墙壁透明度
+          </div>
+          <div className="flex items-center gap-3">
+            <input
+              type="range"
+              min="0.05"
+              max="1"
+              step="0.05"
+              value={wallOpacity}
+              onChange={(e) => setWallOpacity(parseFloat(e.target.value))}
+              className="flex-1 h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer 
+                       focus:outline-none focus:ring-2 focus:ring-primary-500
+                       slider:bg-primary-500"
+            />
+            <span className="text-xs text-gray-500 min-w-[32px] text-right">
+              {Math.round(wallOpacity * 100)}%
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

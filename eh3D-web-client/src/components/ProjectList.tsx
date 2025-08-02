@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { Plus, Copy, Trash2, FolderOpen, Calendar, Settings, LogOut, ChevronDown } from 'lucide-react'
 import { useProjectStore } from '../lib/state/projectStore'
 import CreateProjectModal from './CreateProjectModal'
-import { indexedDBStorage } from '../lib/storage/indexedDB'
+
 
 interface ProjectListProps {
   onProjectSelect: () => void
@@ -78,48 +78,7 @@ const ProjectList: React.FC<ProjectListProps> = ({ onProjectSelect, onAdminPanel
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              onClick={async () => {
-                try {
-                  // 调试：显示IndexedDB中的数据
-                  await indexedDBStorage.init()
-                  const adminModels = await indexedDBStorage.getAllModels()
-                  const adminCategories = await indexedDBStorage.getCategories()
-                  const storageInfo = await indexedDBStorage.getStorageInfo()
-                  
-                  console.log('管理后台数据调试:')
-                  console.log('adminModels:', adminModels)
-                  console.log('adminCategories:', adminCategories)
-                  console.log('storageInfo:', storageInfo)
-                  
-                  const modelInfo = adminModels.map(m => 
-                    `- ${m.name} (${m.fileName}, ${(m.fileSize / 1024 / 1024).toFixed(2)}MB)`
-                  ).join('\n')
-                  
-                  const debugInfo = [
-                    `📊 IndexedDB存储信息:`,
-                    `已用: ${(storageInfo.used / 1024 / 1024).toFixed(2)}MB`,
-                    `配额: ${(storageInfo.quota / 1024 / 1024).toFixed(0)}MB`,
-                    `使用率: ${storageInfo.usedPercent.toFixed(1)}%`,
-                    ``,
-                    `📦 发现 ${adminModels.length} 个上传的模型:`,
-                    modelInfo || '（无模型）',
-                    ``,
-                    `📁 分类 (${adminCategories.length}个):`,
-                    adminCategories.join(', ')
-                  ].join('\n')
-                  
-                  alert(debugInfo)
-                } catch (error) {
-                  console.error('调试数据获取失败:', error)
-                  alert('调试数据获取失败: ' + (error instanceof Error ? error.message : '未知错误'))
-                }
-              }}
-              className="px-3 py-2 bg-yellow-500 hover:bg-yellow-600 
-                       text-white rounded-lg transition-colors text-sm"
-            >
-              调试数据
-            </button>
+
             <button
               onClick={onAdminPanel}
               className="flex items-center gap-2 px-6 py-3 bg-gray-600 hover:bg-gray-700 

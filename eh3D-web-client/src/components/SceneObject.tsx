@@ -22,8 +22,7 @@ const SceneObject: React.FC<SceneObjectProps> = ({ object }) => {
   const { 
     selectedObjects, 
     selectObject, 
-    updateObject, 
-    startPreview,
+    
     deleteObject,
     // updateObject, // 已禁用物理引擎相关功能但保留以备后用
     currentProject,
@@ -187,14 +186,21 @@ const SceneObject: React.FC<SceneObjectProps> = ({ object }) => {
 
   const [width, height, depth] = getObjectDimensions()
 
-  // 确保对象在场地范围内 - 区分GLB模型和默认Box模型的Y坐标处理
+  // 确保对象在扩展地板范围内 - 包含3米外围区域
   const clampPosition = (pos: [number, number, number]): [number, number, number] => {
     const [x, y, z] = pos
+    
+    // 扩展边界计算 - 与Scene3D中的逻辑保持一致
+    const extendedMinX = -3 + width / 2
+    const extendedMaxX = projLength + 3 - width / 2
+    const extendedMinZ = -3 + depth / 2
+    const extendedMaxZ = projWidth + 3 - depth / 2
+    
     return [
-      Math.max(width / 2, Math.min(projLength - width / 2, x)),
+      Math.max(extendedMinX, Math.min(extendedMaxX, x)),
       // GLB模型使用Y=0让底部贴地，Box模型使用height/2让中心点位于地面之上
       isAdminModel ? Math.max(0, y) : Math.max(height / 2, y),
-      Math.max(depth / 2, Math.min(projWidth - depth / 2, z))
+      Math.max(extendedMinZ, Math.min(extendedMaxZ, z))
     ]
   }
 
@@ -311,6 +317,8 @@ const SceneObject: React.FC<SceneObjectProps> = ({ object }) => {
       const previewObject = {
         type: object.type,
         model: modelName, // 使用正确的模型名称
+        initialPosition: object.position, // 保存当前位置
+        initialRotation: object.rotation, // 保存当前旋转角度
         metadata: {
           ...object.metadata,
           adminModelName: modelName // 确保包含模型名称
@@ -395,23 +403,7 @@ const SceneObject: React.FC<SceneObjectProps> = ({ object }) => {
     return colorMap[object.model] || '#6b7280'
   }
 
-  // 获取对象名称
-  const getObjectName = () => {
-    const nameMap: Record<string, string> = {
-      'cabinet_small': '小型快递柜',
-      'cabinet_medium': '中型快递柜',
-      'cabinet_large': '大型快递柜',
-      'cabinet_combined': '组合快递柜',
-      'shelf_single': '单面货架',
-      'shelf_double': '双面货架',
-      'shelf_corner': '转角货架',
-      'shelf_heavy': '重型货架',
-      'wall_basic': '墙体',
-      'door_single': '门',
-      'window_standard': '窗户'
-    }
-    return nameMap[object.model] || object.model
-  }
+
 
 
 

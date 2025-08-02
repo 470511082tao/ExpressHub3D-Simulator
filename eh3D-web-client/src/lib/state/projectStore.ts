@@ -26,6 +26,8 @@ export interface ObjectConfig {
 export interface PreviewObject {
   type: 'cabinet' | 'shelf' | 'building'
   model: string
+  initialPosition?: [number, number, number] // 初始位置（用于双击移动）
+  initialRotation?: number // 初始旋转角度（用于双击移动）
   metadata?: {
     capacity?: number
     layers?: number
@@ -49,6 +51,33 @@ export interface Project {
   dimensions: [number, number, number] // 长宽高(米)
   objects: ObjectConfig[]
   thumbnail?: string
+  businessConfig?: {
+    operation?: {
+      storeAddress: string
+      managerCount: number
+      employeeCount: number
+      managerSalary: number
+      employeeSalary: number
+      monthlyRent: number
+      monthlyUtilities: number
+    }
+    staff?: any // 暂时保留
+    package?: any // 暂时保留
+    packageFlow?: {
+      morningPackages: number
+      afternoonPackages: number
+      peakHourMultiplier: number
+      averageRetentionHours: number
+      smallPackageRatio: number
+      largePackageRatio: number
+    }
+    community?: {
+      totalUsers: number
+      activeUserRate: number
+      pickupFrequency: number
+      averagePickupTime: number
+    }
+  }
 }
 
 interface ProjectState {
@@ -77,6 +106,9 @@ interface ProjectState {
   selectObject: (id: string) => void
   clearSelection: () => void
   
+  // 成本计算管理
+  updateBusinessConfig: (configType: 'operation' | 'staff' | 'package' | 'packageFlow' | 'community', data: any) => void
+  
   // 预览模式管理
   startPreview: (object: PreviewObject) => void
   updatePreviewPosition: (position: [number, number, number]) => void
@@ -93,7 +125,7 @@ interface ProjectState {
   generateThumbnail: (dataUrl: string) => void
 }
 
-const generateId = () => `obj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
 
 export const useProjectStore = create<ProjectState>()(
   persist(
@@ -320,11 +352,37 @@ export const useProjectStore = create<ProjectState>()(
         set({ selectedObjects: [] })
       },
       
+      updateBusinessConfig: (configType, data) => {
+        set(state => {
+          if (!state.currentProject) return state
+          
+          const updatedProject = {
+            ...state.currentProject,
+            businessConfig: {
+              ...state.currentProject.businessConfig,
+              [configType]: data
+            },
+            updatedAt: new Date().toISOString()
+          }
+          
+          // 更新项目列表中的项目
+          const updatedProjects = state.projects.map(p => 
+            p.id === updatedProject.id ? updatedProject : p
+          )
+          
+          return {
+            ...state,
+            currentProject: updatedProject,
+            projects: updatedProjects
+          }
+        })
+      },
+      
       startPreview: (object) => {
         set({
           previewMode: true,
           previewObject: object,
-          previewPosition: null,
+          previewPosition: object.initialPosition || null,
           selectedObjects: []
         })
       },
@@ -341,7 +399,7 @@ export const useProjectStore = create<ProjectState>()(
           type: previewObject.type,
           model: previewObject.model,
           position,
-          rotation: 0,
+          rotation: previewObject.initialRotation || 0,
           metadata: previewObject.metadata
           // name字段会由addObject自动生成
         }

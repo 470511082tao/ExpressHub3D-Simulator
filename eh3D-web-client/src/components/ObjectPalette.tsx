@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Package, Layers, Building, Search, ChevronDown } from 'lucide-react'
+import { Package, Layers, Building, Search } from 'lucide-react'
 import { useProjectStore } from '../lib/state/projectStore'
 import { indexedDBStorage, ModelData } from '../lib/storage/indexedDB'
 
@@ -15,7 +15,6 @@ interface ObjectItem {
   name: string
   model: string
   preview: string
-  dimensions: [number, number, number] // 长宽高
   metadata?: {
     capacity?: number
     layers?: number
@@ -33,15 +32,13 @@ interface ObjectItem {
 type AdminModel = ModelData
 
 const ObjectPalette: React.FC = () => {
-  const { startPreview, previewMode, cancelPreview } = useProjectStore()
+  const { startPreview } = useProjectStore()
   const [searchTerm, setSearchTerm] = useState('')
-  const [expandedCategories, setExpandedCategories] = useState<string[]>(['cabinets'])
-  const [draggedItem, setDraggedItem] = useState<ObjectItem | null>(null)
+
   const [adminModels, setAdminModels] = useState<AdminModel[]>([])
   const [modelUrlCache, setModelUrlCache] = useState<Map<string, string>>(new Map())
   const [previewImageUrls, setPreviewImageUrls] = useState<Map<string, string>>(new Map())
-  const [open, setOpen] = useState(false)
-  const [fixedOpen, setFixedOpen] = useState(false)
+
 
   // 从IndexedDB加载管理后台上传的模型
   useEffect(() => {
@@ -149,7 +146,6 @@ const ObjectPalette: React.FC = () => {
       name: adminModel.name,
       model: adminModel.fileName, // 使用文件名作为模型标识
       preview: previewImageUrl || (isCached ? '⚡' : '📦'), // 优先使用预览图片，否则使用图标
-      dimensions: adminModel.dimensions || [1, 1, 1],
           metadata: {
         description: adminModel.description,
         isAdminModel: true,
@@ -175,7 +171,7 @@ const ObjectPalette: React.FC = () => {
     const iconMap: Record<string, React.ReactNode> = {
       'cabinets': <Package size={16} />,
       'shelves': <Layers size={16} />,
-      'buildings': <Building size={16} />
+      'equipment': <Building size={16} />
     }
     return iconMap[categoryId] || <Package size={16} />
   }
@@ -185,7 +181,7 @@ const ObjectPalette: React.FC = () => {
     const nameMap: Record<string, string> = {
       'cabinets': '快递柜',
       'shelves': '货架',
-      'buildings': '建筑构件'
+      'equipment': '设备'
     }
     return nameMap[categoryId] || categoryId
   }
@@ -215,21 +211,7 @@ const ObjectPalette: React.FC = () => {
       }, [] as ObjectCategory[])
   }, [adminModels, modelUrlCache, previewImageUrls])
 
-  const toggleCategory = (categoryId: string) => {
-    setExpandedCategories(prev => 
-      prev.includes(categoryId)
-        ? prev.filter(id => id !== categoryId)
-        : [...prev, categoryId]
-    )
-  }
 
-  const handleDragStart = (item: ObjectItem) => {
-    setDraggedItem(item)
-  }
-
-  const handleDragEnd = () => {
-    setDraggedItem(null)
-  }
 
   const handleStartPreview = (item: ObjectItem) => {
     // 所有物品都是管理后台上传的模型
@@ -251,6 +233,8 @@ const ObjectPalette: React.FC = () => {
         objectType = 'cabinet'
       } else if (adminModel.category === 'shelves') {
         objectType = 'shelf'
+      } else if (adminModel.category === 'equipment') {
+        objectType = 'building' // 设备类型映射为building
       } else {
         objectType = 'building'
       }
@@ -315,7 +299,6 @@ const ObjectPalette: React.FC = () => {
                         </div>
                   <div className="w-full text-center">
                     <div className="font-medium text-gray-900 truncate text-xs">{item.name}</div>
-                    <div className="text-xs text-gray-500">{item.dimensions.join('×')}m</div>
                         {item.metadata?.description && (
                       <div className="text-xs text-gray-400 mt-0.5 truncate">{item.metadata.description}</div>
                         )}

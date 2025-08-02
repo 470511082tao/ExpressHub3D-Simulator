@@ -8,7 +8,7 @@ import {
   Grid3X3, 
   Settings,
   Download,
-  Ruler,
+  Building2,
   Eye,
   Search,
   ChevronDown
@@ -22,6 +22,8 @@ interface ToolbarProps {
   onToggleGrid: (show: boolean) => void
   cameraMode: 'orbit' | 'fps'
   onChangeCameraMode: (mode: 'orbit' | 'fps') => void
+  showWalls: boolean
+  onToggleWalls: (show: boolean) => void
 }
 
 const Toolbar: React.FC<ToolbarProps> = ({
@@ -30,7 +32,9 @@ const Toolbar: React.FC<ToolbarProps> = ({
   showGrid,
   onToggleGrid,
   cameraMode,
-  onChangeCameraMode
+  onChangeCameraMode,
+  showWalls,
+  onToggleWalls
 }) => {
   const { 
     currentProject, 
@@ -40,7 +44,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
     history, 
     historyIndex,
     selectObject,
-    clearSelection
+
   } = useProjectStore()
 
   const [searchTerm, setSearchTerm] = useState('')
@@ -96,7 +100,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
       } else if (modelName.includes('架') || modelName.includes('shelf')) {
         return '货架'
       } else {
-        return '建筑'
+        return '设备'
       }
     }
     
@@ -104,9 +108,9 @@ const Toolbar: React.FC<ToolbarProps> = ({
     const typeMap: Record<string, string> = {
       'cabinet': '快递柜',
       'shelf': '货架', 
-      'building': '建筑'
+      'building': '设备'
     }
-    return typeMap[obj.type] || obj.type
+    return typeMap[obj.type] || '设备'
   }
 
   const handleSave = () => {
@@ -210,85 +214,89 @@ const Toolbar: React.FC<ToolbarProps> = ({
             </div>
           </div>
 
-          {/* 历史记录 */}
-          <div className="flex items-center gap-1 mr-4">
-            <button
-              onClick={undo}
-              disabled={!canUndo}
-              className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 
-                       disabled:text-gray-400 disabled:hover:bg-transparent
-                       rounded transition-colors"
-              title="撤销 (Ctrl+Z)"
-            >
-              <Undo size={16} />
-            </button>
-            <button
-              onClick={redo}
-              disabled={!canRedo}
-              className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 
-                       disabled:text-gray-400 disabled:hover:bg-transparent
-                       rounded transition-colors"
-              title="重做 (Ctrl+Y)"
-            >
-              <Redo size={16} />
-            </button>
-          </div>
+        {/* 历史记录 */}
+        <div className="flex items-center gap-1 mr-4">
+          <button
+            onClick={undo}
+            disabled={!canUndo}
+            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 
+                     disabled:text-gray-400 disabled:hover:bg-transparent
+                     rounded transition-colors"
+            title="撤销 (Ctrl+Z)"
+          >
+            <Undo size={16} />
+          </button>
+          <button
+            onClick={redo}
+            disabled={!canRedo}
+            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 
+                     disabled:text-gray-400 disabled:hover:bg-transparent
+                     rounded transition-colors"
+            title="重做 (Ctrl+Y)"
+          >
+            <Redo size={16} />
+          </button>
+        </div>
 
-          {/* 视图工具 */}
-          <div className="flex items-center gap-1 mr-4 border-l border-gray-300 pl-4">
-            <button
-              onClick={() => onToggleGrid(!showGrid)}
+        {/* 视图工具 */}
+        <div className="flex items-center gap-1 mr-4 border-l border-gray-300 pl-4">
+          <button
+            onClick={() => onToggleGrid(!showGrid)}
+            className={`p-2 rounded transition-colors ${
+              showGrid 
+                ? 'text-primary-600 bg-primary-50' 
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+            }`}
+            title="网格显示"
+          >
+            <Grid3X3 size={16} />
+          </button>
+
+          <button
+            onClick={() => onChangeCameraMode(cameraMode === 'orbit' ? 'fps' : 'orbit')}
+            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 
+                     rounded transition-colors"
+            title={`切换到${cameraMode === 'orbit' ? 'FPS' : '轨道'}视角`}
+          >
+              <Eye size={16} />
+          </button>
+        </div>
+
+          {/* 显示墙壁 */}
+        <div className="flex items-center gap-1 mr-4 border-l border-gray-300 pl-4">
+          <button
+              onClick={() => onToggleWalls(!showWalls)}
               className={`p-2 rounded transition-colors ${
-                showGrid 
+                showWalls 
                   ? 'text-primary-600 bg-primary-50' 
                   : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
               }`}
-              title="网格显示"
-            >
-              <Grid3X3 size={16} />
-            </button>
-
-            <button
-              onClick={() => onChangeCameraMode(cameraMode === 'orbit' ? 'fps' : 'orbit')}
-              className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 
-                       rounded transition-colors"
-              title={`切换到${cameraMode === 'orbit' ? 'FPS' : '轨道'}视角`}
-            >
-              <Eye size={16} />
-            </button>
-          </div>
-
-          {/* 测量工具 */}
-          <div className="flex items-center gap-1 mr-4 border-l border-gray-300 pl-4">
-            <button
-              className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 
-                       rounded transition-colors"
-              title="测量工具"
-            >
-              <Ruler size={16} />
-            </button>
-          </div>
-
-          {/* 导出工具 */}
-          <div className="flex items-center gap-1 border-l border-gray-300 pl-4">
-            <button
-              onClick={onExportSnapshot}
-              className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 
-                       rounded transition-colors"
-              title="导出截图"
-            >
-              <Camera size={16} />
-            </button>
-            
-            <button
-              className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 
-                       rounded transition-colors"
-              title="导出项目"
-            >
-              <Download size={16} />
-            </button>
-          </div>
+              title="显示墙壁"
+          >
+              <Building2 size={16} />
+          </button>
         </div>
+
+        {/* 导出工具 */}
+        <div className="flex items-center gap-1 border-l border-gray-300 pl-4">
+          <button
+            onClick={onExportSnapshot}
+            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 
+                     rounded transition-colors"
+            title="导出截图"
+          >
+            <Camera size={16} />
+          </button>
+          
+          <button
+            className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 
+                     rounded transition-colors"
+            title="导出项目"
+          >
+            <Download size={16} />
+          </button>
+        </div>
+      </div>
       </div>
 
 

@@ -7,6 +7,7 @@ interface ModelData {
   fileSize: number
   uploadTime: string
   description?: string
+  cost?: number // 新增：模型成本金额
   dimensions?: [number, number, number]
   fileContent: ArrayBuffer // 直接存储二进制数据
   previewImage?: ArrayBuffer // 新增：预览图片的二进制数据

@@ -32,9 +32,7 @@ const GLBModelInner: React.FC<GLBModelProps & { validModelUrl: string }> = ({
   onPointerUp,
   onPointerEnter,
   onPointerLeave,
-  dragging = false,
-  isPreview = false,
-  opacity = 1,
+
   forwardRef,
   isSelected = false,
   isHovered = false
@@ -66,27 +64,173 @@ const GLBModelInner: React.FC<GLBModelProps & { validModelUrl: string }> = ({
     return 0 // 默认无发光
   }
 
-  // 缓存材质引用，避免重复遍历
-  const materialsRef = useRef<THREE.MeshStandardMaterial[]>([])
+  // 缓存材质引用，支持所有材质类型
+  const materialsRef = useRef<THREE.Material[]>([])
   const lastEffectState = useRef({ isSelected: false, isHovered: false })
 
-  // 应用材质高亮效果 - 优化版本
+  // 材质修复和调试 - 专门针对GLB黑色显示问题
   useEffect(() => {
-    if (!gltf?.scene || !isModelReady) return
+    if (!gltf?.scene || !isModelReady) {
+      console.log('⏸️ GLB材质检查跳过:', { hasGltf: !!gltf?.scene, isModelReady })
+      return
+    }
 
-    // 首次加载时收集所有材质
-    if (materialsRef.current.length === 0) {
-      gltf.scene.traverse((child: any) => {
-        if (child instanceof THREE.Mesh && child.material) {
-          const materials = Array.isArray(child.material) ? child.material : [child.material]
-          materials.forEach((material) => {
-            if (material instanceof THREE.MeshStandardMaterial) {
-              materialsRef.current.push(material)
+    console.log('🚀 开始GLB材质全面修复...')
+
+    // 收集所有材质并进行全面修复
+    const materials: THREE.Material[] = []
+    let meshCount = 0
+    
+    gltf.scene.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        meshCount++
+        const mesh = child as THREE.Mesh
+        console.log(`🔧 网格 ${meshCount}:`, { 
+          name: child.name, 
+          materialType: Array.isArray(mesh.material) ? 'Array' : mesh.material.type,
+          materialCount: Array.isArray(mesh.material) ? mesh.material.length : 1
+        })
+        
+        const materialArray = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+        materialArray.forEach((material, index) => {
+          materials.push(material)
+          
+          console.log(`🎨 处理材质 ${index} (${material.type}):`)
+          
+          // 修复材质可见性
+          material.visible = true
+          
+          // 针对所有材质类型的基本修复
+          if ('color' in material) {
+            if (!material.color || ((material.color as any).r === 0 && (material.color as any).g === 0 && (material.color as any).b === 0)) {
+              (material as any).color = new THREE.Color(0xffffff)
+              console.log('  ✅ 修复了黑色/缺失颜色')
+            }
+          }
+          
+          if ('opacity' in material && (material as any).opacity === 0) {
+            (material as any).opacity = 1.0
+            console.log('  ✅ 修复了零透明度')
+          }
+
+          // MeshPhysicalMaterial 特殊处理
+          if (material.type === 'MeshPhysicalMaterial') {
+            const physicalMat = material as any
+            
+            // 重置PBR属性，避免过度金属感
+            if (physicalMat.metalness > 0.5) {
+              physicalMat.metalness = 0.0
+              console.log('  ✅ 降低了金属度')
+            }
+            
+            if (physicalMat.roughness < 0.5) {
+              physicalMat.roughness = 0.8
+              console.log('  ✅ 增加了粗糙度')
+            }
+            
+            // 清除过度的清漆效果
+            if (physicalMat.clearcoat > 0) {
+              physicalMat.clearcoat = 0.0
+              console.log('  ✅ 移除了清漆效果')
+            }
+            
+            // 重置反射率
+            if (physicalMat.reflectivity > 0.5) {
+              physicalMat.reflectivity = 0.1
+              console.log('  ✅ 降低了反射率')
+            }
+          }
+
+          // MeshStandardMaterial 特殊处理
+          if (material.type === 'MeshStandardMaterial') {
+            const standardMat = material as any
+            
+            if (standardMat.metalness > 0.3) {
+              standardMat.metalness = 0.0
+              console.log('  ✅ 重置了金属度')
+            }
+            
+            if (standardMat.roughness < 0.5) {
+              standardMat.roughness = 0.8
+              console.log('  ✅ 增加了粗糙度')
+            }
+          }
+
+          // 纹理修复 - 关键的颜色空间修复
+          const textureMapTypes = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'aoMap']
+          textureMapTypes.forEach(mapType => {
+            if (mapType in material && (material as any)[mapType]) {
+              const texture = (material as any)[mapType]
+              
+              // 强制设置正确的颜色空间
+              if (mapType === 'map' || mapType === 'emissiveMap') {
+                if (texture.colorSpace !== THREE.SRGBColorSpace) {
+                  texture.colorSpace = THREE.SRGBColorSpace
+                  console.log(`  🎨 修复了${mapType}颜色空间`)
+                }
+              }
+              
+              // 强制纹理更新
+              texture.needsUpdate = true
+              
+              // 确保纹理完全加载
+              if (texture.image && !texture.image.complete) {
+                texture.image.onload = () => {
+                  texture.needsUpdate = true
+                  console.log(`  📷 ${mapType}纹理加载完成`)
+                }
+              }
             }
           })
-        }
-      })
-    }
+
+          // 强制材质更新
+          material.needsUpdate = true
+          
+          // 详细的材质信息输出
+          const materialInfo: any = {
+            type: material.type,
+            name: material.name,
+            visible: material.visible,
+            needsUpdate: material.needsUpdate
+          }
+          
+          if ('color' in material) {
+            materialInfo.color = `rgb(${Math.round(((material as any).color.r || 0) * 255)}, ${Math.round(((material as any).color.g || 0) * 255)}, ${Math.round(((material as any).color.b || 0) * 255)})`
+          }
+          
+          if ('metalness' in material) {
+            materialInfo.metalness = (material as any).metalness
+          }
+          
+          if ('roughness' in material) {
+            materialInfo.roughness = (material as any).roughness
+          }
+          
+          if ('map' in material && (material as any).map) {
+            const map = (material as any).map
+            materialInfo.texture = {
+              hasTexture: true,
+              size: map.image ? `${map.image.width}x${map.image.height}` : 'unknown',
+              colorSpace: map.colorSpace,
+              format: map.format
+            }
+          }
+          
+          console.log(`  📊 修复后材质信息:`, materialInfo)
+        })
+      }
+    })
+
+    console.log(`🎯 完成材质修复: ${meshCount} 个网格，${materials.length} 个材质`)
+
+    // 缓存材质引用
+    materialsRef.current = materials
+
+  }, [gltf?.scene, isModelReady, validModelUrl])
+
+  // 应用材质高亮效果 - 支持所有材质类型
+  useEffect(() => {
+    if (!gltf?.scene || !isModelReady) return
 
     // 只在状态真正改变时更新材质
     if (lastEffectState.current.isSelected !== isSelected || 
@@ -95,11 +239,14 @@ const GLBModelInner: React.FC<GLBModelProps & { validModelUrl: string }> = ({
       const emissiveColor = getEmissiveColor()
       const emissiveIntensity = getEmissiveIntensity()
       
-      // 批量更新材质，减少渲染次数
+      // 批量更新材质，支持不同类型的材质
       materialsRef.current.forEach((material) => {
-        material.emissive.setHex(parseInt(emissiveColor.replace('#', '0x')))
-        material.emissiveIntensity = emissiveIntensity
+        if ('emissive' in material && 'emissiveIntensity' in material) {
+          const emissiveMaterial = material as any
+          emissiveMaterial.emissive.setHex(parseInt(emissiveColor.replace('#', '0x')))
+          emissiveMaterial.emissiveIntensity = emissiveIntensity
         material.needsUpdate = true
+        }
       })
 
       // 更新状态缓存
