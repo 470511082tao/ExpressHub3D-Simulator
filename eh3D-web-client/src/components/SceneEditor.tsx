@@ -25,6 +25,7 @@ const SceneEditor: React.FC<SceneEditorProps> = ({ onBackToProjects }) => {
   const [showGrid, setShowGrid] = useState(true)
   const [showWalls, setShowWalls] = useState(false)
   const [wallOpacity, setWallOpacity] = useState(0.7)
+  const [showInfo, setShowInfo] = useState(false)
   const [cameraMode, setCameraMode] = useState<'orbit' | 'fps'>('orbit')
   const [activeMenu, setActiveMenu] = useState<'objects' | 'traffic' | 'statistics' | 'simulation' | null>('objects')
   const [businessConfig, setBusinessConfig] = useState<{
@@ -154,6 +155,8 @@ const SceneEditor: React.FC<SceneEditorProps> = ({ onBackToProjects }) => {
         onChangeCameraMode={setCameraMode}
         showWalls={showWalls}
         onToggleWalls={setShowWalls}
+        showInfo={showInfo}
+        onToggleInfo={setShowInfo}
       />
 
       <div className="flex-1 flex overflow-hidden">
@@ -285,7 +288,7 @@ const SceneEditor: React.FC<SceneEditorProps> = ({ onBackToProjects }) => {
                 }}
               > */}
                 {/* 主场景 */}
-                <Scene3D showWalls={showWalls} wallOpacity={wallOpacity} />
+                <Scene3D showWalls={showWalls} wallOpacity={wallOpacity} showInfo={showInfo} />
               {/* </Physics> */}
 
               {/* 网格辅助线 */}

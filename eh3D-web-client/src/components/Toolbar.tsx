@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { 
   ArrowLeft, 
-  Save, 
   Undo, 
   Redo, 
   Camera, 
@@ -11,7 +10,12 @@ import {
   Building2,
   Eye,
   Search,
-  ChevronDown
+  ChevronDown,
+  Edit2,
+  Check,
+  X,
+  Play,
+  Info
 } from 'lucide-react'
 import { useProjectStore } from '../lib/state/projectStore'
 
@@ -24,6 +28,8 @@ interface ToolbarProps {
   onChangeCameraMode: (mode: 'orbit' | 'fps') => void
   showWalls: boolean
   onToggleWalls: (show: boolean) => void
+  showInfo: boolean
+  onToggleInfo: (show: boolean) => void
 }
 
 const Toolbar: React.FC<ToolbarProps> = ({
@@ -34,11 +40,13 @@ const Toolbar: React.FC<ToolbarProps> = ({
   cameraMode,
   onChangeCameraMode,
   showWalls,
-  onToggleWalls
+  onToggleWalls,
+  showInfo,
+  onToggleInfo
 }) => {
   const { 
     currentProject, 
-    saveCurrentProject, 
+    updateProjectName,
     undo, 
     redo, 
     history, 
@@ -49,7 +57,10 @@ const Toolbar: React.FC<ToolbarProps> = ({
 
   const [searchTerm, setSearchTerm] = useState('')
   const [showDropdown, setShowDropdown] = useState(false)
+  const [editingProjectName, setEditingProjectName] = useState(false)
+  const [projectNameInput, setProjectNameInput] = useState('')
   const searchRef = useRef<HTMLDivElement>(null)
+  const projectNameInputRef = useRef<HTMLInputElement>(null)
 
   const canUndo = historyIndex > 0
   const canRedo = historyIndex < history.length - 1
@@ -113,14 +124,60 @@ const Toolbar: React.FC<ToolbarProps> = ({
     return typeMap[obj.type] || '设备'
   }
 
-  const handleSave = () => {
-    saveCurrentProject()
-    // 显示保存成功提示
+  const handleRun = () => {
+    // TODO: 实现仿真运行逻辑
+    console.log('开始运行仿真...')
+    
+    // 显示运行提示
     const toast = document.createElement('div')
-    toast.className = 'fixed top-4 left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg z-50'
-    toast.textContent = '项目已保存'
+    toast.className = 'fixed top-4 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg z-50'
+    toast.textContent = '仿真运行中...'
     document.body.appendChild(toast)
     setTimeout(() => document.body.removeChild(toast), 2000)
+  }
+
+  // 项目名称编辑相关函数
+  const handleStartEditProjectName = () => {
+    if (currentProject) {
+      setProjectNameInput(currentProject.name)
+      setEditingProjectName(true)
+      // 延迟聚焦以确保输入框已渲染
+      setTimeout(() => {
+        projectNameInputRef.current?.focus()
+        projectNameInputRef.current?.select()
+      }, 0)
+    }
+  }
+
+  const handleSaveProjectName = () => {
+    const trimmedName = projectNameInput.trim()
+    if (trimmedName && trimmedName !== currentProject?.name) {
+      updateProjectName(trimmedName)
+    }
+    setEditingProjectName(false)
+  }
+
+  const handleCancelEditProjectName = () => {
+    setEditingProjectName(false)
+    setProjectNameInput('')
+  }
+
+  // 防止失焦和按钮点击冲突
+  const handleInputBlur = (e: React.FocusEvent) => {
+    // 如果焦点移动到保存或取消按钮，不执行失焦保存
+    const relatedTarget = e.relatedTarget as HTMLElement
+    if (relatedTarget && (relatedTarget.dataset.action === 'save' || relatedTarget.dataset.action === 'cancel')) {
+      return
+    }
+    handleSaveProjectName()
+  }
+
+  const handleProjectNameKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSaveProjectName()
+    } else if (e.key === 'Escape') {
+      handleCancelEditProjectName()
+    }
   }
 
   return (
@@ -137,8 +194,51 @@ const Toolbar: React.FC<ToolbarProps> = ({
         </button>
         
         <div className="border-l border-gray-300 pl-4">
-          <h1 className="text-gray-900 font-medium">{currentProject?.name}</h1>
-          <div className="text-sm text-gray-500">
+          {editingProjectName ? (
+            <div className="flex items-center gap-2">
+              <input
+                ref={projectNameInputRef}
+                type="text"
+                value={projectNameInput}
+                onChange={(e) => setProjectNameInput(e.target.value)}
+                onKeyDown={handleProjectNameKeyDown}
+                onBlur={handleInputBlur}
+                maxLength={50}
+                placeholder="请输入项目名称"
+                className="text-gray-900 font-medium bg-white border border-primary-300 rounded px-2 py-1 
+                         focus:ring-2 focus:ring-primary-500 focus:border-primary-500 min-w-0"
+                style={{ width: Math.max(projectNameInput.length * 8 + 20, 120) + 'px' }}
+              />
+              <button
+                data-action="save"
+                onClick={handleSaveProjectName}
+                disabled={!projectNameInput.trim()}
+                className="p-1 text-green-600 hover:text-green-700 hover:bg-green-50 rounded transition-colors
+                         disabled:text-gray-400 disabled:hover:bg-transparent"
+                title="保存"
+              >
+                <Check size={14} />
+              </button>
+              <button
+                data-action="cancel"
+                onClick={handleCancelEditProjectName}
+                className="p-1 text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                title="取消"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            <div 
+              className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-2 py-1 transition-colors"
+              onClick={handleStartEditProjectName}
+              title="点击编辑项目名称"
+            >
+              <h1 className="text-gray-900 font-medium">{currentProject?.name}</h1>
+              <Edit2 size={14} className="text-gray-400 hover:text-gray-600" />
+            </div>
+          )}
+          <div className="text-sm text-gray-500 ml-2">
             {currentProject?.dimensions.join('×')}m
           </div>
         </div>
@@ -275,6 +375,18 @@ const Toolbar: React.FC<ToolbarProps> = ({
           >
               <Building2 size={16} />
           </button>
+
+          <button
+              onClick={() => onToggleInfo(!showInfo)}
+              className={`p-2 rounded transition-colors ${
+                showInfo 
+                  ? 'text-primary-600 bg-primary-50' 
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+              }`}
+              title="显示信息"
+          >
+              <Info size={16} />
+          </button>
         </div>
 
         {/* 导出工具 */}
@@ -301,15 +413,15 @@ const Toolbar: React.FC<ToolbarProps> = ({
 
 
 
-      {/* 右侧：保存和设置 */}
+      {/* 右侧：运行和设置 */}
       <div className="flex items-center gap-2 ml-6">
         <button
-          onClick={handleSave}
-          className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 
+          onClick={handleRun}
+          className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 
                    text-white rounded-lg transition-colors font-medium"
         >
-          <Save size={16} />
-          保存
+          <Play size={16} />
+          运行
         </button>
         
         <button

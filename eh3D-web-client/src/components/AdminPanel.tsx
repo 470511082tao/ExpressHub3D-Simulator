@@ -48,11 +48,11 @@ const generateCellCode = (index: number, rows: number, columns: number): string 
 const DEFAULT_CATEGORIES: Category[] = [
   { id: 'cabinets', name: '快递柜', description: '各种类型的快递柜设备' },
   { id: 'shelves', name: '货架', description: '仓储货架和展示架' },
-  { id: 'equipment', name: '设备', description: '各种设备和工具模型' }
+  { id: 'robots', name: '机器人', description: '各种机器人设备模型' }
 ]
 
 // 受保护的默认分类ID（不能编辑、修改、删除）
-const PROTECTED_CATEGORY_IDS = ['cabinets', 'shelves', 'equipment']
+const PROTECTED_CATEGORY_IDS = ['cabinets', 'shelves', 'robots']
 
 // 检查是否为受保护的分类
 const isProtectedCategory = (categoryId: string): boolean => {
@@ -194,32 +194,55 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBack }) => {
 
 
 
-  const handleDeleteCategory = async (categoryName: string) => {
+  const handleDeleteCategory = async (categoryName: string, forceDelete: boolean = false) => {
     // 找到对应的分类对象
     const category = categories.find(cat => cat.name === categoryName)
     if (!category) return
 
     // 检查是否为受保护的分类
     if (isProtectedCategory(category.id)) {
-      alert('默认分类（快递柜、货架、建筑）不能删除')
+      alert('默认分类（快递柜、货架、机器人）不能删除')
       return
     }
 
     // 检查是否有模型使用此分类
-    const hasModels = models.some(model => model.category === categoryName)
-    if (hasModels) {
-      alert('该分类下还有模型，无法删除')
+    const relatedModels = models.filter(model => model.category === categoryName)
+    if (relatedModels.length > 0 && !forceDelete) {
+      const confirmMessage = `该分类下有 ${relatedModels.length} 个模型。\n\n是否强制删除分类及其所有关联模型？\n\n注意：此操作不可恢复！`
+      if (window.confirm(confirmMessage)) {
+        return await handleDeleteCategory(categoryName, true)
+      }
       return
     }
     
     try {
+      // 如果是强制删除，先删除所有相关模型
+      if (forceDelete && relatedModels.length > 0) {
+        for (const model of relatedModels) {
+          try {
+            await indexedDBStorage.deleteModel(model.id)
+            console.log(`已删除模型: ${model.name}`)
+          } catch (error) {
+            console.error(`删除模型失败: ${model.name}`, error)
+          }
+        }
+        // 更新本地模型列表
+        const remainingModels = models.filter(model => model.category !== categoryName)
+        setModels(remainingModels)
+      }
+      
       const newCategories = categories.filter(cat => cat.name !== categoryName)
-      await saveData(models, newCategories)
+      await saveData(forceDelete ? models.filter(model => model.category !== categoryName) : models, newCategories)
+      
+      console.log(`分类 "${categoryName}" 删除成功${forceDelete ? '（包含所有关联模型）' : ''}`)
+      alert(`分类 "${categoryName}" 删除成功${forceDelete ? `\n已同时删除 ${relatedModels.length} 个关联模型` : ''}`)
     } catch (error) {
       console.error('删除分类失败:', error)
       alert('删除分类失败：' + (error instanceof Error ? error.message : '未知错误'))
     }
   }
+
+
 
   const handleClearStorage = async () => {
     if (window.confirm('确定要清除所有模型数据吗？此操作不可恢复！')) {

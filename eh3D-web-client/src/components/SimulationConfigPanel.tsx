@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Settings, X } from 'lucide-react'
 import { useProjectStore } from '../lib/state/projectStore'
 
-interface PackageFlowData {
+interface DeliveryData {
   morningPackages: number // 上午到站件数
   afternoonPackages: number // 下午到站件数
   peakHourMultiplier: number // 高峰时段倍数
@@ -11,9 +11,7 @@ interface PackageFlowData {
   largePackageRatio: number // 大包裹比例 (%)
 }
 
-interface CommunityData {
-  totalUsers: number // 社区总用户数
-  activeUserRate: number // 活跃用户比例 (%)
+interface PickupData {
   pickupFrequency: number // 取件频率 (次/天)
   averagePickupTime: number // 平均取件时间 (分钟)
 }
@@ -24,7 +22,7 @@ interface SimulationConfigPanelProps {
 }
 
 const SimulationConfigPanel: React.FC<SimulationConfigPanelProps> = ({ configType, onClose }) => {
-  const [packageFlowData, setPackageFlowData] = useState<PackageFlowData>({
+  const [deliveryData, setDeliveryData] = useState<DeliveryData>({
     morningPackages: 150,
     afternoonPackages: 100,
     peakHourMultiplier: 1.5,
@@ -33,9 +31,7 @@ const SimulationConfigPanel: React.FC<SimulationConfigPanelProps> = ({ configTyp
     largePackageRatio: 10
   })
 
-  const [communityData, setCommunityData] = useState<CommunityData>({
-    totalUsers: 1200,
-    activeUserRate: 60,
+  const [pickupData, setPickupData] = useState<PickupData>({
     pickupFrequency: 1.2,
     averagePickupTime: 3
   })
@@ -46,9 +42,9 @@ const SimulationConfigPanel: React.FC<SimulationConfigPanelProps> = ({ configTyp
     if (currentProject?.businessConfig) {
       const businessConfig = currentProject.businessConfig
       
-      // 加载包裹流量配置
+      // 加载派件设置配置
       if (businessConfig.packageFlow && configType === 'package-flow') {
-        setPackageFlowData({
+        setDeliveryData({
           morningPackages: businessConfig.packageFlow.morningPackages || 150,
           afternoonPackages: businessConfig.packageFlow.afternoonPackages || 100,
           peakHourMultiplier: businessConfig.packageFlow.peakHourMultiplier || 1.5,
@@ -58,11 +54,9 @@ const SimulationConfigPanel: React.FC<SimulationConfigPanelProps> = ({ configTyp
         })
       }
       
-      // 加载社区人数配置
+      // 加载取件设置配置
       if (businessConfig.community && configType === 'community') {
-        setCommunityData({
-          totalUsers: businessConfig.community.totalUsers || 1200,
-          activeUserRate: businessConfig.community.activeUserRate || 60,
+        setPickupData({
           pickupFrequency: businessConfig.community.pickupFrequency || 1.2,
           averagePickupTime: businessConfig.community.averagePickupTime || 3
         })
@@ -73,9 +67,9 @@ const SimulationConfigPanel: React.FC<SimulationConfigPanelProps> = ({ configTyp
   const getConfigTitle = () => {
     switch (configType) {
       case 'package-flow':
-        return '包裹流量配置'
+        return '派件设置'
       case 'community':
-        return '社区人数配置'
+        return '取件设置'
       default:
         return '仿真配置'
     }
@@ -84,17 +78,17 @@ const SimulationConfigPanel: React.FC<SimulationConfigPanelProps> = ({ configTyp
   const handleSave = () => {
     switch (configType) {
       case 'package-flow':
-        updateBusinessConfig('packageFlow', packageFlowData)
+        updateBusinessConfig('packageFlow', deliveryData)
         break
       case 'community':
-        updateBusinessConfig('community', communityData)
+        updateBusinessConfig('community', pickupData)
         break
     }
     onClose()
   }
 
-  const renderPackageFlowConfig = () => {
-    const dailyTotal = packageFlowData.morningPackages + packageFlowData.afternoonPackages
+  const renderDeliveryConfig = () => {
+    const dailyTotal = deliveryData.morningPackages + deliveryData.afternoonPackages
     
     return (
       <div className="space-y-4">
@@ -123,8 +117,8 @@ const SimulationConfigPanel: React.FC<SimulationConfigPanelProps> = ({ configTyp
               <input
                 type="number"
                 min="0"
-                value={packageFlowData.morningPackages}
-                onChange={(e) => setPackageFlowData(prev => ({ ...prev, morningPackages: parseInt(e.target.value) || 0 }))}
+                value={deliveryData.morningPackages}
+                onChange={(e) => setDeliveryData(prev => ({ ...prev, morningPackages: parseInt(e.target.value) || 0 }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 
                          focus:ring-primary-500 focus:border-primary-500"
               />
@@ -135,8 +129,8 @@ const SimulationConfigPanel: React.FC<SimulationConfigPanelProps> = ({ configTyp
               <input
                 type="number"
                 min="0"
-                value={packageFlowData.afternoonPackages}
-                onChange={(e) => setPackageFlowData(prev => ({ ...prev, afternoonPackages: parseInt(e.target.value) || 0 }))}
+                value={deliveryData.afternoonPackages}
+                onChange={(e) => setDeliveryData(prev => ({ ...prev, afternoonPackages: parseInt(e.target.value) || 0 }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 
                          focus:ring-primary-500 focus:border-primary-500"
               />
@@ -154,11 +148,11 @@ const SimulationConfigPanel: React.FC<SimulationConfigPanelProps> = ({ configTyp
                   type="number"
                   min="0"
                   max="100"
-                  value={packageFlowData.smallPackageRatio}
+                  value={deliveryData.smallPackageRatio}
                   onChange={(e) => {
                     const value = parseInt(e.target.value) || 0
                     const largeRatio = 100 - value
-                    setPackageFlowData(prev => ({ 
+                    setDeliveryData(prev => ({ 
                       ...prev, 
                       smallPackageRatio: value,
                       largePackageRatio: largeRatio
@@ -175,11 +169,11 @@ const SimulationConfigPanel: React.FC<SimulationConfigPanelProps> = ({ configTyp
                   type="number"
                   min="0"
                   max="100"
-                  value={packageFlowData.largePackageRatio}
+                  value={deliveryData.largePackageRatio}
                   onChange={(e) => {
                     const value = parseInt(e.target.value) || 0
                     const smallRatio = 100 - value
-                    setPackageFlowData(prev => ({ 
+                    setDeliveryData(prev => ({ 
                       ...prev, 
                       smallPackageRatio: smallRatio,
                       largePackageRatio: value
@@ -225,8 +219,8 @@ const SimulationConfigPanel: React.FC<SimulationConfigPanelProps> = ({ configTyp
               type="number"
               min="1"
               max="168"
-              value={packageFlowData.averageRetentionHours}
-              onChange={(e) => setPackageFlowData(prev => ({ ...prev, averageRetentionHours: parseInt(e.target.value) || 1 }))}
+              value={deliveryData.averageRetentionHours}
+              onChange={(e) => setDeliveryData(prev => ({ ...prev, averageRetentionHours: parseInt(e.target.value) || 1 }))}
               className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 
                        focus:ring-primary-500 focus:border-primary-500"
             />
@@ -241,62 +235,11 @@ const SimulationConfigPanel: React.FC<SimulationConfigPanelProps> = ({ configTyp
     )
   }
 
-  const renderCommunityConfig = () => {
-    const activeUsers = Math.ceil(communityData.totalUsers * communityData.activeUserRate / 100)
-    const dailyPickups = Math.ceil(activeUsers * communityData.pickupFrequency)
-    const totalPickupTime = dailyPickups * communityData.averagePickupTime
-    
+  const renderPickupConfig = () => {
     return (
       <div className="space-y-4">
-        {/* 成本汇总 */}
-        <div className="bg-green-50 rounded-lg p-3">
-          <h3 className="text-xs font-medium text-gray-700 mb-2">社区汇总</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="text-center">
-              <div className="text-lg font-bold text-green-600">{activeUsers}</div>
-              <div className="text-xs text-gray-600">活跃用户数</div>
-            </div>
-            <div className="text-center">
-              <div className="text-lg font-bold text-green-600">{dailyPickups}</div>
-              <div className="text-xs text-gray-600">日均取件次数</div>
-            </div>
-          </div>
-        </div>
-
-        {/* 社区基础配置 */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-3">社区基础信息</label>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">社区总用户数</label>
-              <input
-                type="number"
-                min="0"
-                value={communityData.totalUsers}
-                onChange={(e) => setCommunityData(prev => ({ ...prev, totalUsers: parseInt(e.target.value) || 0 }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 
-                         focus:ring-primary-500 focus:border-primary-500"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm text-gray-600 mb-1">活跃用户比例 (%)</label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                value={communityData.activeUserRate}
-                onChange={(e) => setCommunityData(prev => ({ ...prev, activeUserRate: parseInt(e.target.value) || 0 }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 
-                         focus:ring-primary-500 focus:border-primary-500"
-              />
-            </div>
-          </div>
-        </div>
-
         {/* 取件行为配置 */}
-        <div className="border-t border-gray-200 pt-4">
+        <div>
           <h4 className="text-sm font-medium text-gray-700 mb-3">取件行为配置</h4>
           
           <div className="grid grid-cols-2 gap-4">
@@ -306,11 +249,14 @@ const SimulationConfigPanel: React.FC<SimulationConfigPanelProps> = ({ configTyp
                 type="number"
                 min="0"
                 step="0.1"
-                value={communityData.pickupFrequency}
-                onChange={(e) => setCommunityData(prev => ({ ...prev, pickupFrequency: parseFloat(e.target.value) || 0 }))}
+                value={pickupData.pickupFrequency}
+                onChange={(e) => setPickupData(prev => ({ ...prev, pickupFrequency: parseFloat(e.target.value) || 0 }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 
                          focus:ring-primary-500 focus:border-primary-500"
               />
+              <p className="text-xs text-gray-500 mt-1">
+                每个用户平均每天取件的次数
+              </p>
             </div>
             
             <div>
@@ -318,19 +264,15 @@ const SimulationConfigPanel: React.FC<SimulationConfigPanelProps> = ({ configTyp
               <input
                 type="number"
                 min="1"
-                value={communityData.averagePickupTime}
-                onChange={(e) => setCommunityData(prev => ({ ...prev, averagePickupTime: parseInt(e.target.value) || 1 }))}
+                value={pickupData.averagePickupTime}
+                onChange={(e) => setPickupData(prev => ({ ...prev, averagePickupTime: parseInt(e.target.value) || 1 }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-1 
                          focus:ring-primary-500 focus:border-primary-500"
               />
+              <p className="text-xs text-gray-500 mt-1">
+                单次取件操作所需的平均时间
+              </p>
             </div>
-          </div>
-          
-          <div className="mt-3 p-2 bg-gray-50 rounded text-xs text-gray-600">
-            <p>计算公式：</p>
-            <p>• 活跃用户数 = 总用户数 × 活跃比例</p>
-            <p>• 日均取件次数 = 活跃用户数 × 取件频率</p>
-            <p>• 日总取件时间 = 日均取件次数 × 平均取件时间 = {totalPickupTime} 分钟</p>
           </div>
         </div>
       </div>
@@ -340,11 +282,11 @@ const SimulationConfigPanel: React.FC<SimulationConfigPanelProps> = ({ configTyp
   const renderContent = () => {
     switch (configType) {
       case 'package-flow':
-        return renderPackageFlowConfig()
+        return renderDeliveryConfig()
       case 'community':
-        return renderCommunityConfig()
+        return renderPickupConfig()
       default:
-        return renderPackageFlowConfig()
+        return renderDeliveryConfig()
     }
   }
 

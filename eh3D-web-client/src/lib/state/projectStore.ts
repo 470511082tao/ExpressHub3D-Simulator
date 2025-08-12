@@ -96,6 +96,7 @@ interface ProjectState {
   createProject: (name: string, dimensions: [number, number, number]) => void
   loadProject: (id: string) => void
   saveCurrentProject: () => void
+  updateProjectName: (name: string) => void
   deleteProject: (id: string) => void
   duplicateProject: (id: string) => void
   
@@ -177,6 +178,24 @@ export const useProjectStore = create<ProjectState>()(
         
         const updatedProject = {
           ...currentProject,
+          updatedAt: new Date().toISOString()
+        }
+        
+        set({
+          currentProject: updatedProject,
+          projects: projects.map(p => 
+            p.id === currentProject.id ? updatedProject : p
+          )
+        })
+      },
+      
+      updateProjectName: (name) => {
+        const { currentProject, projects } = get()
+        if (!currentProject) return
+        
+        const updatedProject = {
+          ...currentProject,
+          name: name.trim(),
           updatedAt: new Date().toISOString()
         }
         

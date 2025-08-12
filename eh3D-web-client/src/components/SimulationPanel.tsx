@@ -20,7 +20,7 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ onConfigClick, select
       {/* 内容区域 */}
       <div className="flex-1 p-4 overflow-y-auto">
         <div className="space-y-4">
-          {/* 包裹流量配置卡片 */}
+          {/* 派件设置配置卡片 */}
           <div 
             className={`rounded-lg p-4 border transition-colors cursor-pointer ${
               selectedConfig === 'package-flow'
@@ -34,13 +34,13 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ onConfigClick, select
                 <Package size={24} className="text-blue-600" />
               </div>
               <div>
-                <h3 className="font-medium text-gray-900">包裹流量</h3>
+                <h3 className="font-medium text-gray-900">派件设置</h3>
                 <p className="text-sm text-gray-600">设置每日上午和下午到站件数</p>
               </div>
             </div>
           </div>
 
-          {/* 社区人数配置卡片 */}
+          {/* 取件设置配置卡片 */}
           <div 
             className={`rounded-lg p-4 border transition-colors cursor-pointer ${
               selectedConfig === 'community'
@@ -54,8 +54,8 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ onConfigClick, select
                 <Users size={24} className="text-green-600" />
               </div>
               <div>
-                <h3 className="font-medium text-gray-900">社区人数</h3>
-                <p className="text-sm text-gray-600">设置取走包裹的频率和用户数</p>
+                <h3 className="font-medium text-gray-900">取件设置</h3>
+                <p className="text-sm text-gray-600">设置取件频率和时间配置</p>
               </div>
             </div>
           </div>
